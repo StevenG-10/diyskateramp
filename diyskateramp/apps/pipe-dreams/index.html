@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>("Quarter") PIPE DREAMS</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; background: #000; color: #fff; margin: 0; padding: 1em; }
+    .container { max-width: 100%; margin: 0; background: #000; padding: 0; }
+    h1, h3 { color: #fff; }
+    .main-flex { display: flex; gap: 1em; }
+    #canvas-wrap { display: flex; flex-direction: column; gap: 1em; flex: 1; align-items: center;}
+    canvas { border: 1.5px solid #fff; background: #fff; display: block; width: 100%; height: auto; }
+    .input-panel { display: flex; flex-direction: column; gap: 1em; width: 300px; }
+    .inputs { display: flex; flex-direction: column; gap: 0.8em; }
+    .input-row { display: flex; gap: 0.8em; flex-wrap: wrap; }
+    label.input-label {
+      font-size: 0.9em;
+      min-width: 120px;
+    }
+    .input-field {
+      width: 60px;
+      min-width: 60px;
+      background: #333;
+      border-color: #888;
+      color: #fff;
+    }
+    select.input-field { min-width: 74px; }
+    button { padding: 0.7em 2em; font-size: 1.1em; background: #444; color: #fff; border: 1px solid #888; }
+    .note { text-align: center; color: #ccc; font-size: 0.97em; margin-top: 1.1em; }
+    .arrow-btn {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: #e0e0e0;
+      border-radius: 50%;
+      margin: 0 8px;
+      font-size: 2em;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      line-height: 40px;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+      vertical-align: middle;
+    }
+    .arrow-btn:active {
+      background: #bdbdbd;
+    }
+    .projection-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+      margin-bottom: 0.5em;
+    }
+    .result-row {
+      display: flex;
+      align-items: center;
+      gap: 0.7em;
+      margin-top: 0.3em;
+      margin-bottom: 0.2em;
+    }
+    .result-label {
+      font-weight: bold;
+      min-width: 130px;
+      color: #87cefa;
+      font-size: 1.05em;
+    }
+    .result-box {
+      display: inline-block;
+      padding: 0.28em 0.9em;
+      background: #333;
+      border: 1.5px solid #888;
+      border-radius: 5px;
+      font-size: 1.08em;
+      font-family: monospace;
+      color: #fff;
+    }
+    .calc-expr {
+      color: #666;
+      font-size: 0.98em;
+      margin-left: 0.3em;
+      font-family: "Arial Rounded MT Bold", Arial, sans-serif;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 1em;
+      margin-bottom: 0.2em;
+      margin-top: 0.1em;
+    }
+    .toggle-btn {
+      padding: 0.4em 1.4em;
+      font-size: 1em;
+      border-radius: 5px;
+      border: 1.5px solid #888;
+      background: #444;
+      cursor: pointer;
+      font-weight: bold;
+      color: #fff;
+      transition: background 0.15s, color 0.15s;
+    }
+    .toggle-btn.active {
+      background: #87cefa;
+      color: #000;
+    }
+    .ramp2-align-row {
+      display: flex;
+      align-items: center;
+      gap: 0.7em;
+      margin-bottom: 0.6em;
+      margin-top: 0.7em;
+      flex-wrap: wrap;
+    }
+    .ramp2-arrow-btn {
+      width: 32px;
+      height: 32px;
+      font-size: 1.5em;
+      line-height: 32px;
+      margin: 0 2px;
+      padding: 0;
+      border-radius: 50%;
+      background: #555;
+      border: 1.5px solid #888;
+      color: #87cefa;
+      font-weight: bold;
+      cursor: pointer;
+      vertical-align: middle;
+      transition: background 0.17s;
+    }
+    .ramp2-arrow-btn:active {
+      background: #777;
+    }
+    .ramp2-align-value {
+      min-width: 90px;
+      font-family: monospace;
+      font-size: 1.04em;
+      color: #87cefa;
+      text-align: center;
+    }
+    .ramp2-align-input-label {
+      font-size: 0.98em;
+      color: #87cefa;
+      margin-left: 0.2em;
+    }
+    .ramp2-align-input {
+      width: 60px;
+      min-width: 60px;
+      font-size: 1em;
+      padding: 0.2em 0.4em;
+      border: 1px solid #888;
+      border-radius: 5px;
+      background: #333;
+      color: #fff;
+      margin-left: 0.2em;
+    }
+    @media (max-width: 1200px) {
+      .main-flex { flex-direction: column; align-items: center; }
+      .input-panel { width: 100%; max-width: 500px; }
+    }
+    #buttonContainer {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>("Quarter") PIPE DREAMS</h1>
+  <div class="main-flex">
+    <div id="canvas-wrap">
+      <div>
+        <h3 style="margin-bottom:0.2em;">2D Side Profile (Inset Lines)</h3>
+        <canvas id="canvas2d" width="648" height="403"></canvas>
+      </div>
+      <div>
+        <canvas id="canvas3d" width="648" height="403"></canvas>
+      </div>
+    </div>
+    <div class="input-panel">
+      <form id="inputsForm" autocomplete="off" onsubmit="return false;">
+      <div class="inputs">
+        <div class="input-row">
+          <label class="input-label">Quarter Height:
+            <input type="number" id="height" min="1" value="36" class="input-field"> in
+          </label>
+          <label class="input-label">Platform Width:
+            <input type="number" id="platform" min="0" value="20" class="input-field"> in
+          </label>
+        </div>
+        <div class="input-row">
+          <label class="input-label">Ramp Radius:
+            <input type="number" id="radius" min="1" value="60" class="input-field"> in
+          </label>
+        </div>
+        <div class="input-row">
+          <label class="input-label">Board Width:
+            <input type="number" id="boardWidth" min="1" value="96" class="input-field"> in
+          </label>
+          <label class="input-label">Board Height:
+            <input type="number" id="boardHeight" min="1" value="48" class="input-field"> in
+          </label>
+        </div>
+        <div class="input-row">
+          <label class="input-label">Ramp Width (3D):
+            <input type="number" id="rampWidth" min="1" value="96" class="input-field"> in
+          </label>
+        </div>
+        <div class="input-row">
+          <label class="input-label">Side Width:
+            <select id="sideWidth" class="input-field">
+              <option value="0.5">0.5"</option>
+              <option value="0.75" selected>0.75"</option>
+              <option value="1">1"</option>
+              <option value="1.25">1.25"</option>
+            </select>
+          </label>
+          <label class="input-label">Platform Thickness:
+            <select id="platformThickness" class="input-field">
+              <option value="0.5">0.5"</option>
+              <option value="0.75" selected>0.75"</option>
+              <option value="1">1"</option>
+              <option value="1.25">1.25"</option>
+            </select>
+          </label>
+        </div>
+        <div class="input-row">
+          <label class="input-label">Coping Width:
+            <input type="number" id="copingWidth" min="0.1" step="0.01" value="2.0" class="input-field"> in
+          </label>
+        </div>
+      </div>
+      <div class="toggle-row" style="margin-top:1.3em;">
+        <button type="button" id="togglePlatformBtn" class="toggle-btn">Add Platform</button>
+        <span style="font-size:0.99em;">Show Platform Top View Callouts</span>
+        <button type="button" id="toggleDoubleSidesBtn" class="toggle-btn">2 Sides</button>
+        <span style="font-size:0.99em;">Show 2 Sides (Cut Layout)</span>
+      </div>
+      <div class="ramp2-align-row" title="Align the second (mirrored) ramp vertically/horizontally inside the board." id="ramp2AlignRow" style="display:none;">
+        <span style="font-size:1em; font-weight:bold; color:#184a71;">Ramp 2 Align:</span>
+        <button type="button" class="ramp2-arrow-btn" id="ramp2LeftBtn" aria-label="Move Ramp 2 Left">&#8592;</button>
+        <button type="button" class="ramp2-arrow-btn" id="ramp2UpBtn" aria-label="Move Ramp 2 Up">&#8593;</button>
+        <span class="ramp2-align-value" id="ramp2OffsetDisplay">0.00", 0.00"</span>
+        <button type="button" class="ramp2-arrow-btn" id="ramp2DownBtn" aria-label="Move Ramp 2 Down">&#8595;</button>
+        <button type="button" class="ramp2-arrow-btn" id="ramp2RightBtn" aria-label="Move Ramp 2 Right">&#8594;</button>
+        <label class="ramp2-align-input-label" for="ramp2OffsetInput">Set:</label>
+        <input type="number" step="0.01" id="ramp2OffsetInputY" class="ramp2-align-input" value="0">
+        <input type="number" step="0.01" id="ramp2OffsetInputX" class="ramp2-align-input" value="0">
+        <span style="color:#777;font-size:0.97em;">inches (Y, X)</span>
+      </div>
+      <div class="result-row">
+        <label class="input-label" style="margin-right:0;">
+          2x4 Cut Length:
+          <input type="text" id="twobyfourLenBox" class="input-field" readonly>
+        </label>
+      </div>
+      <button id="drawBtn" style="margin-top:0.8em;">Draw</button>
+      </form>
+    </div>
+  </div>
+  <div class="note">
+    <b>
+      <u>2D view:</u> All ramp/profile lines in black, inset 10px toward center. Measurement callouts are bold red, inset about 8px.<br>
+      <u>3D view:</u> Only the top platform is shaded (darker gray), all other surfaces are outlined.<br>
+      All units are inches.<br>
+      <u>Arc Center:</u> Blue dot and dashed line, shows where to place your arc's pivot.<br>
+      <u>Base to Edge:</u> Horizontal red arrow from end of ramp to right edge of board.<br>
+      <u>Pivot Height:</u> Vertical red arrow from bottom of ramp to arc center (radius).
+    </b>
+    <br>
+    <b>
+      <u>Platform Callouts (toggle):</u> In 2D view, displays a platform top-down callout directly on the user-defined board area. Red arrows show ramp width (horizontal) and platform height (vertical, from top right), always using the user-defined board scale and space. Dashed lines show both platform edges.
+    </b>
+  </div>
+  <div id="buttonContainer">
+    <button id="leftArrow" class="arrow-btn" title="Previous View">&larr;</button>
+    <button id="rightArrow" class="arrow-btn" title="Next View">&rarr;</button>
+  </div>
+<script>
+const projections = [
+  { value: "iso", label: "Isometric (flipped)" },
+  { value: "persp", label: "Perspective 3/4 (flipped)" }
+];
+let currentProjIdx = 0;
+let showPlatformCallout = false;
+let showDoubleSides = false;
+let ramp2OffsetY = 0; // in inches vertical
+let ramp2OffsetX = 0; // in inches horizontal
+const RAMP2_OFFSET_STEP = 0.25; // inches per arrow click
+const OFFSET_LIMIT = 72;
+
+document.addEventListener('DOMContentLoaded', function() {
+  const btn = document.getElementById('togglePlatformBtn');
+  btn.onclick = function() {
+    showPlatformCallout = !showPlatformCallout;
+    btn.classList.toggle('active', showPlatformCallout);
+    update();
+  };
+  const doubleSidesBtn = document.getElementById('toggleDoubleSidesBtn');
+  doubleSidesBtn.onclick = function() {
+    showDoubleSides = !showDoubleSides;
+    doubleSidesBtn.classList.toggle('active', showDoubleSides);
+    document.getElementById('ramp2AlignRow').style.display = showDoubleSides ? "" : "none";
+    update();
+  };
+
+  // Arrow and input controls for ramp 2 Y (vertical)
+  document.getElementById('ramp2UpBtn').onclick = function() {
+    ramp2OffsetY = Math.max(ramp2OffsetY - RAMP2_OFFSET_STEP, -OFFSET_LIMIT);
+    updateResultsDisplay();
+    update();
+    document.getElementById('ramp2OffsetInputY').value = ramp2OffsetY.toFixed(2);
+  };
+  document.getElementById('ramp2DownBtn').onclick = function() {
+    ramp2OffsetY = Math.min(ramp2OffsetY + RAMP2_OFFSET_STEP, OFFSET_LIMIT);
+    updateResultsDisplay();
+    update();
+    document.getElementById('ramp2OffsetInputY').value = ramp2OffsetY.toFixed(2);
+  };
+  document.getElementById('ramp2OffsetInputY').addEventListener('change', function() {
+    let val = parseFloat(this.value);
+    if (isNaN(val)) val = 0;
+    val = Math.max(Math.min(val, OFFSET_LIMIT), -OFFSET_LIMIT);
+    ramp2OffsetY = val;
+    updateResultsDisplay();
+    update();
+    this.value = ramp2OffsetY.toFixed(2);
+  });
+
+  // Arrow and input controls for ramp 2 X (horizontal)
+  document.getElementById('ramp2LeftBtn').onclick = function() {
+    ramp2OffsetX = Math.max(ramp2OffsetX - RAMP2_OFFSET_STEP, -OFFSET_LIMIT);
+    updateResultsDisplay();
+    update();
+    document.getElementById('ramp2OffsetInputX').value = ramp2OffsetX.toFixed(2);
+  };
+  document.getElementById('ramp2RightBtn').onclick = function() {
+    ramp2OffsetX = Math.min(ramp2OffsetX + RAMP2_OFFSET_STEP, OFFSET_LIMIT);
+    updateResultsDisplay();
+    update();
+    document.getElementById('ramp2OffsetInputX').value = ramp2OffsetX.toFixed(2);
+  };
+  document.getElementById('ramp2OffsetInputX').addEventListener('change', function() {
+    let val = parseFloat(this.value);
+    if (isNaN(val)) val = 0;
+    val = Math.max(Math.min(val, OFFSET_LIMIT), -OFFSET_LIMIT);
+    ramp2OffsetX = val;
+    updateResultsDisplay();
+    update();
+    this.value = ramp2OffsetX.toFixed(2);
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (!showDoubleSides) return;
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
+    if (e.key === 'ArrowUp') {
+      document.getElementById('ramp2UpBtn').click();
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowDown') {
+      document.getElementById('ramp2DownBtn').click();
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowLeft') {
+      document.getElementById('ramp2LeftBtn').click();
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowRight') {
+      document.getElementById('ramp2RightBtn').click();
+      e.preventDefault();
+    }
+  });
+
+  updateResultsDisplay();
+
+  document.getElementById('platformThickness').addEventListener('change', updateResultsDisplay);
+  document.getElementById('sideWidth').addEventListener('change', updateResultsDisplay);
+
+  // Add live update for all number and select inputs
+  [
+    'height','platform','radius','boardWidth','boardHeight','rampWidth','copingWidth',
+    'sideWidth','platformThickness'
+  ].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', function() {
+        updateResultsDisplay();
+        update();
+      });
+      el.addEventListener('change', function() {
+        updateResultsDisplay();
+        update();
+      });
+    }
+  });
+});
+
+function getInputs() {
+  return {
+    height: Number(document.getElementById('height').value),
+    platform: Number(document.getElementById('platform').value),
+    radius: Number(document.getElementById('radius').value),
+    boardWidth: Number(document.getElementById('boardWidth').value),
+    boardHeight: Number(document.getElementById('boardHeight').value),
+    rampWidth: Number(document.getElementById('rampWidth').value),
+    sideWidth: Number(document.getElementById('sideWidth').value),
+    platformThickness: Number(document.getElementById('platformThickness').value),
+    copingWidth: Number(document.getElementById('copingWidth').value)
+  };
+}
+
+function insetPoint(x, y, cx, cy, amount) {
+  const dx = cx - x, dy = cy - y;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  if (len === 0) return [x, y];
+  return [x + dx/len * amount, y + dy/len * amount];
+}
+
+function drawArrow(ctx, from, to, opts = {}) {
+  const {arrowSize=10, text, textOffset=18, textSize=20, inset=8} = opts;
+  let [x0, y0] = from, [x1, y1] = to;
+  const dx = x1 - x0, dy = y1 - y0;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  if (len > 0) {
+    x0 += dx / len * inset;
+    y0 += dy / len * inset;
+    x1 -= dx / len * inset;
+    y1 -= dy / len * inset;
+  }
+  ctx.save();
+  ctx.strokeStyle = "#c00";
+  ctx.fillStyle = "#c00";
+  ctx.lineWidth = 2.3;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  function drawHead(xa, ya, xb, yb) {
+    const ang = Math.atan2(yb - ya, xb - xa);
+    ctx.beginPath();
+    ctx.moveTo(xb, yb);
+    ctx.lineTo(xb - arrowSize * Math.cos(ang - Math.PI / 7), yb - arrowSize * Math.sin(ang - Math.PI / 7));
+    ctx.lineTo(xb - arrowSize * Math.cos(ang + Math.PI / 7), yb - arrowSize * Math.sin(ang + Math.PI / 7));
+    ctx.lineTo(xb, yb);
+    ctx.fill();
+  }
+  drawHead(x1, y1, x0, y0);
+  drawHead(x0, y0, x1, y1);
+  if (text) {
+    ctx.save();
+    ctx.font = `bold ${textSize}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    const dx2 = x1 - x0, dy2 = y1 - y0;
+    const len2 = Math.sqrt(dx2*dx2 + dy2*dy2);
+    let offx = -dy2 / len2 * textOffset, offy = dx2 / len2 * textOffset;
+    ctx.fillStyle = "#c00";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 4;
+    ctx.strokeText(text, mx + offx, my + offy);
+    ctx.lineWidth = 1;
+    ctx.fillText(text, mx + offx, my + offy);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// Draw platform as a rectangle at the top right, with horizontal and vertical measurement arrows and dashed platform edges
+function drawPlatformCalloutOnBoard(ctx, px, boardWidth, boardHeight, rampWidth, platformHeight, insetPx, cx, cy) {
+  rampWidth = Math.max(0, Math.min(rampWidth, boardWidth));
+  platformHeight = Math.max(0, Math.min(platformHeight, boardHeight));
+
+  const tr = [boardWidth, boardHeight];
+  const tl = [boardWidth - rampWidth, boardHeight];
+  const bl = [boardWidth - rampWidth, boardHeight - platformHeight];
+  const br = [boardWidth, boardHeight - platformHeight];
+
+  const itr = insetPoint(...px(tr), cx, cy, insetPx);
+  const itl = insetPoint(...px(tl), cx, cy, insetPx);
+  const ibl = insetPoint(...px(bl), cx, cy, insetPx);
+  const ibr = insetPoint(...px(br), cx, cy, insetPx);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(...itr);
+  ctx.lineTo(...itl);
+  ctx.lineTo(...ibl);
+  ctx.lineTo(...ibr);
+  ctx.closePath();
+  ctx.globalAlpha = 0.13;
+  ctx.fillStyle = "#2176ff";
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 2.1;
+  ctx.strokeStyle = "#2176ff";
+  ctx.stroke();
+  ctx.restore();
+
+  drawArrow(ctx, itr, itl, { text: `${rampWidth.toFixed(2)}" (ramp width)`, textOffset: 23, textSize: 16, inset: 10 });
+  drawArrow(ctx, itr, ibr, { text: `${platformHeight.toFixed(2)}" (platform height)`, textOffset: 23, textSize: 16, inset: 10 });
+
+  ctx.save();
+  ctx.setLineDash([5, 5]);
+  ctx.strokeStyle = "#c00";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(...itl);
+  ctx.lineTo(...ibl);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(...itr);
+  ctx.lineTo(...ibr);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// 2D Side Profile Drawing (with Ramp 2 offset logic)
+function draw2d() {
+  console.log('draw2d function called');
+  const c = document.getElementById('canvas2d');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  const {platform, radius, boardWidth, boardHeight, height, platformThickness, copingWidth, rampWidth, sideWidth} = getInputs();
+  const effHeight = height - platformThickness;
+
+  const xRun = Math.sqrt(Math.max(0, 2 * radius * effHeight - effHeight * effHeight));
+  const A = [0, 0];
+  const B = [0, effHeight];
+  const E = [platform, effHeight];
+  const D = [platform + xRun, radius];
+  const G = [platform + xRun, 0];
+
+  const margin = 25;
+  const scale = Math.min(
+    (c.width - 2 * margin) / boardWidth,
+    (c.height - 2 * margin) / boardHeight
+  );
+  const ox = margin, oy = c.height - margin;
+  function px([x, y]) { return [ox + x * scale, oy - y * scale]; }
+  const cx = c.width / 2, cy = c.height / 2, insetPx = 10;
+  const pxA = insetPoint(...px(A), cx, cy, insetPx);
+  const pxB = insetPoint(...px(B), cx, cy, insetPx);
+  const pxE = insetPoint(...px(E), cx, cy, insetPx);
+  const pxD = insetPoint(...px(D), cx, cy, insetPx);
+  const pxG = insetPoint(...px(G), cx, cy, insetPx);
+
+  // Board outline
+  ctx.save();
+  ctx.beginPath();
+  const pxBoard0 = insetPoint(...px([0, 0]), cx, cy, insetPx);
+  const pxBoard1 = insetPoint(...px([boardWidth, 0]), cx, cy, insetPx);
+  const pxBoard2 = insetPoint(...px([boardWidth, boardHeight]), cx, cy, insetPx);
+  const pxBoard3 = insetPoint(...px([0, boardHeight]), cx, cy, insetPx);
+  ctx.moveTo(...pxBoard0);
+  ctx.lineTo(...pxBoard1);
+  ctx.lineTo(...pxBoard2);
+  ctx.lineTo(...pxBoard3);
+  ctx.closePath();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#000";
+  ctx.stroke();
+  ctx.restore();
+
+  // Ramp profile
+  ctx.save();
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(...pxA); ctx.lineTo(...pxB); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(...pxB); ctx.lineTo(...pxE); ctx.stroke();
+  let [dCx, dCy] = pxD;
+  let arcRadius = Math.hypot(pxE[0] - dCx, pxE[1] - dCy);
+  let arcThetaStart = Math.atan2(pxE[1] - dCy, pxE[0] - dCx);
+  let arcThetaEnd   = Math.atan2(pxG[1] - dCy, pxG[0] - dCx);
+  ctx.beginPath();
+  ctx.arc(dCx, dCy, arcRadius, arcThetaStart, arcThetaEnd, true);
+  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(...pxA); ctx.lineTo(...pxG); ctx.stroke();
+  ctx.restore();
+
+  // Measurement callouts: height (A-B), platform (B-E), base (A-G)
+  drawArrow(ctx, pxA, pxB, { text: `${effHeight.toFixed(2)}"`, textOffset: 18, textSize: 18, inset: 8 });
+  drawArrow(ctx, pxB, pxE, { text: `${platform.toFixed(2)}"`, textOffset: 18, textSize: 18, inset: 8 });
+  drawArrow(ctx, pxA, pxG, { text: `${(G[0] - A[0]).toFixed(2)}"`, textOffset: -22, textSize: 18, inset: 8 });
+
+  // Coping
+  if (copingWidth > 0) {
+    const copingRadiusPx = (copingWidth / 2) * scale;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(pxE[0], pxE[1], copingRadiusPx, 0, 2 * Math.PI, false);
+    ctx.fillStyle = "#111";
+    ctx.globalAlpha = 1;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Arc center visuals
+  const arcCenterX = platform + Math.sqrt(Math.max(0, 2 * radius * effHeight - effHeight * effHeight));
+  const pxArcCenter = insetPoint(...px([arcCenterX, radius]), cx, cy, insetPx);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(pxArcCenter[0], pxArcCenter[1], 7, 0, 2 * Math.PI, false);
+  ctx.fillStyle = "#2176ff";
+  ctx.globalAlpha = 1;
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.setLineDash([7, 7]);
+  ctx.strokeStyle = "#2176ff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(pxArcCenter[0], pxArcCenter[1]);
+  ctx.lineTo(pxG[0], pxG[1]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+  ctx.save();
+  ctx.font = 'bold 17px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillStyle = "#2176ff";
+  ctx.fillText("Arc Center", pxArcCenter[0] + 10, pxArcCenter[1] - 8);
+  ctx.restore();
+
+  // New callouts: base to board edge, base to arc center
+  const pxBoardBR = pxBoard1;
+  const pxRampBase = pxG;
+  const horizontalDist = boardWidth - G[0];
+  drawArrow(ctx, pxBoardBR, pxRampBase, {
+    text: `${horizontalDist.toFixed(2)}"`, textOffset: -22, textSize: 18, inset: 8
+  });
+  const vertDist = D[1] - G[1];
+  drawArrow(ctx, pxRampBase, pxArcCenter, {
+    text: `${vertDist.toFixed(2)}"`, textOffset: 22, textSize: 18, inset: 8
+  });
+
+  // Platform Top-Down Callout on Board (toggle feature, inset-matched)
+  if (showPlatformCallout) {
+    drawPlatformCalloutOnBoard(ctx, px, boardWidth, boardHeight, rampWidth, platform, insetPx, cx, cy);
+  }
+
+  // --- Ramp 2 (mirrored, user offset, attached to board edge minus sideWidth, with user X and Y offset) ---
+  if (showDoubleSides) {
+    ctx.save();
+    // Attach to right-hand edge, accounting for sideWidth inset, then apply vertical and horizontal offset (ramp2OffsetY/X in inches)
+    ctx.translate(ox + (boardWidth - sideWidth + ramp2OffsetX) * scale, oy - ramp2OffsetY * scale);
+    // Flip horizontally and vertically (mirror about bottom-right corner)
+    ctx.scale(-1, -1);
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 2;
+    // Draw mirrored ramp profile (trim arc to match first ramp)
+    ctx.beginPath(); ctx.moveTo(...px(A)); ctx.lineTo(...px(B)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(...px(B)); ctx.lineTo(...pxE); ctx.stroke();
+    // Only draw arc from E to G (do not extend past G)
+    let [dCx2, dCy2] = px(D);
+    let arcRadius2 = Math.hypot(px(E)[0] - dCx2, px(E)[1] - dCy2);
+    let arcThetaStart2 = Math.atan2(px(E)[1] - dCy2, px(E)[0] - dCx2);
+    let arcThetaEnd2   = Math.atan2(px(G)[1] - dCy2, px(G)[0] - dCx2);
+    ctx.beginPath();
+    ctx.arc(dCx2, dCy2, arcRadius2, arcThetaStart2, arcThetaEnd2, true);
+    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(...px(A)); ctx.lineTo(...pxG); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+let zoom3d = 1.0;
+let offset3d = { x: 0, y: 0 };
+let isDragging3d = false;
+let dragStart3d = { x: 0, y: 0 };
+let offsetStart3d = { x: 0, y: 0 };
+let rx = 0, ry = 0;
+
+function rotate3d(p, xdeg, ydeg) {
+  let [x, y, z] = p;
+  let rxRad = xdeg * Math.PI / 180;
+  let ryRad = ydeg * Math.PI / 180;
+  let cosX = Math.cos(rxRad), sinX = Math.sin(rxRad);
+  let cosY = Math.cos(ryRad), sinY = Math.sin(ryRad);
+
+  let nx = cosY * x + sinY * z;
+  let nz = cosY * z - sinY * x;
+  let ny = cosX * y - sinX * nz;
+  nz = sinX * y + cosX * nz;
+
+  return [nx, ny, nz];
+}
+
+function setup3dCanvasInteraction() {
+  const c = document.getElementById('canvas3d');
+  c.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    const rect = c.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const prevZoom = zoom3d;
+    zoom3d *= (e.deltaY < 0) ? 1.1 : 0.9;
+    zoom3d = Math.max(zoom3d, 0.15);
+    offset3d.x -= (mx - offset3d.x) * (zoom3d/prevZoom - 1);
+    offset3d.y -= (my - offset3d.y) * (zoom3d/prevZoom - 1);
+    update();
+  }, { passive: false });
+  c.addEventListener('mousedown', function(e) {
+    isDragging3d = true;
+    dragStart3d.x = e.clientX;
+    dragStart3d.y = e.clientY;
+    offsetStart3d.x = offset3d.x;
+    offsetStart3d.y = offset3d.y;
+    c.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', function(e) {
+    if (!isDragging3d) return;
+    if (e.shiftKey) {
+      ry += (e.clientX - dragStart3d.x) * 0.1;
+      rx -= (e.clientY - dragStart3d.y) * 0.1;
+      dragStart3d.x = e.clientX;
+      dragStart3d.y = e.clientY;
+    } else {
+      offset3d.x = offsetStart3d.x + (e.clientX - dragStart3d.x);
+      offset3d.y = offsetStart3d.y + (e.clientY - dragStart3d.y);
+    }
+    update();
+  });
+  window.addEventListener('mouseup', function(e) {
+    isDragging3d = false;
+    c.style.cursor = '';
+  });
+}
+
+function draw3d() {
+  console.log('draw3d function called');
+  const c = document.getElementById('canvas3d');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.save();
+  ctx.translate(offset3d.x, offset3d.y);
+  ctx.scale(zoom3d, zoom3d);
+
+  const {height, platform, radius, rampWidth, platformThickness} = getInputs();
+  const effHeight = height - platformThickness;
+
+  const xRun = Math.sqrt(Math.max(0, 2 * radius * effHeight - effHeight * effHeight));
+  const arcSegments = 14;
+  const A = [0, 0];
+  const B = [0, -effHeight];
+  const E = [platform, -effHeight];
+  const D = [platform + xRun, -radius];
+  const arcCenter = D;
+  const arcStartAngle = Math.atan2(E[1] - D[1], E[0] - D[0]);
+  const arcEndAngle = Math.atan2(0 - D[1], (platform + xRun) - D[0]);
+  const arcRadius = Math.hypot(E[0] - D[0], E[1] - D[1]);
+  const arcPoints = [];
+  for(let i=0;i<=arcSegments;i++) {
+    const t = arcStartAngle + (arcEndAngle - arcStartAngle) * (i/arcSegments);
+    arcPoints.push([
+      arcCenter[0] + arcRadius * Math.cos(t),
+      arcCenter[1] + arcRadius * Math.sin(t)
+    ]);
+  }
+  const profile = [A, B, E, ...arcPoints];
+
+  const cx = c.width/2, cy = c.height/2;
+  const scale3d = 2.5;
+  function centerize([X, Y]) {
+    return [cx + X, cy + Y];
+  }
+  function proj_iso([x, y, z]) {
+    return centerize([
+      (x - z) * 0.7 * scale3d,
+      -(y + (x + z) * 0.5) * scale3d
+    ]);
+  }
+
+  function maybeFlip(XY) {
+    let [X, Y] = XY;
+    return [c.width - X, c.height - Y];
+  }
+  const faceA = profile.map(([x, y]) => rotate3d([x, y, 0], rx, ry));
+  const faceB = profile.map(([x, y]) => rotate3d([x, y, rampWidth], rx, ry));
+
+  ctx.save();
+  ctx.globalAlpha = 0.82;
+  ctx.fillStyle = "#d6eaff";
+  for (let i = 0; i < profile.length - 1; ++i) {
+    const pA1 = faceA[i],     pA2 = faceA[i+1];
+    const pB2 = faceB[i+1],   pB1 = faceB[i];
+    ctx.beginPath();
+    ctx.moveTo(...maybeFlip(proj_iso(pA1)));
+    ctx.lineTo(...maybeFlip(proj_iso(pA2)));
+    ctx.lineTo(...maybeFlip(proj_iso(pB2)));
+    ctx.lineTo(...maybeFlip(proj_iso(pB1)));
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  faceA.forEach(([x, y, z], i) => {
+    const [X, Y] = maybeFlip(proj_iso([x, y, z]));
+    if(i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = "#a2a2a2";
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  faceB.forEach(([x, y, z], i) => {
+    const [X, Y] = maybeFlip(proj_iso([x, y, z]));
+    if(i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = "#ededed";
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  faceA.forEach(([x, y, z], i) => {
+    const [X, Y] = maybeFlip(proj_iso([x, y, z]));
+    if(i===0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+  });
+  ctx.closePath();
+  ctx.stroke();
+  ctx.beginPath();
+  faceB.forEach(([x, y, z], i) => {
+    const [X, Y] = maybeFlip(proj_iso([x, y, z]));
+    if(i===0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+  });
+  ctx.closePath();
+  ctx.stroke();
+  for(let i=0; i<profile.length; ++i) {
+    const a = faceA[i], b = faceB[i];
+    ctx.beginPath();
+    const [X1, Y1] = maybeFlip(proj_iso(a));
+    const [X2, Y2] = maybeFlip(proj_iso(b));
+    ctx.moveTo(X1, Y1); ctx.lineTo(X2, Y2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.restore();
+}
+
+function update() {
+  console.log('update function called');
+  draw2d();
+  draw3d();
+  document.getElementById('projName').textContent = projections[currentProjIdx].label;
+  updateResultsDisplay();
+}
+
+// Sync Ramp 2 movement arrows and text boxes
+function syncRamp2Inputs() {
+  document.getElementById('ramp2OffsetInputY').value = ramp2OffsetY.toFixed(2);
+  document.getElementById('ramp2OffsetInputX').value = ramp2OffsetX.toFixed(2);
+  updateRamp2Position();
+}
+
+// Update Ramp 2 position display and sync inputs
+['ramp2UpBtn', 'ramp2DownBtn', 'ramp2LeftBtn', 'ramp2RightBtn'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    syncRamp2Inputs();
+  });
+});
+
+// Sync text box changes with Ramp 2 position
+['ramp2OffsetInputY', 'ramp2OffsetInputX'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    ramp2OffsetY = parseFloat(document.getElementById('ramp2OffsetInputY').value) || 0;
+    ramp2OffsetX = parseFloat(document.getElementById('ramp2OffsetInputX').value) || 0;
+    ramp2OffsetY = Math.max(Math.min(ramp2OffsetY, OFFSET_LIMIT), -OFFSET_LIMIT);
+    ramp2OffsetX = Math.max(Math.min(ramp2OffsetX, OFFSET_LIMIT), -OFFSET_LIMIT);
+    syncRamp2Inputs();
+    update();
+  });
+});
+
+// Fix Ramp 2 adjustment logic
+function updateRamp2Position() {
+  const ramp2OffsetDisplay = document.getElementById('ramp2OffsetDisplay');
+  ramp2OffsetDisplay.textContent = `${ramp2OffsetY.toFixed(2)}", ${ramp2OffsetX.toFixed(2)}"`;
+}
+
+// Update Ramp 2 position display after each adjustment
+['ramp2UpBtn', 'ramp2DownBtn', 'ramp2LeftBtn', 'ramp2RightBtn'].forEach(id => {
+  document.getElementById(id).addEventListener('click', updateRamp2Position);
+});
+
+window.onload = function() {
+  setup3dCanvasInteraction();
+  update();
+};
+
+function updateResultsDisplay() {
+  const inputs = getInputs();
+  const cutLength = inputs.rampWidth - 2 * inputs.sideWidth;
+  document.getElementById('twobyfourLenBox').value = `${cutLength.toFixed(2)}"`;
+}
+</script>
+</body>
+</html>

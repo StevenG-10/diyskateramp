@@ -1,0 +1,2200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Skateboard Ramp Calculator - Fixed Geometry</title>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.11.3/brython.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.11.3/brython_stdlib.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #000; color: #fff; margin: 0; padding: 1em; }
+        #container { display: flex; gap: 1em; padding: 0; }
+        #controls { min-width: 300px; }
+        .control-section { margin-bottom: 1em; background: #222; padding: 1em; border-radius: 8px; box-shadow: 0 0 4px #0001; }
+        h3 { margin-top: 0; color: #fff; }
+        .input-row { margin-bottom: 0.5em; }
+        .arrow-panel { width: 130px; margin: 0 auto; }
+        .arrow-grid { display: grid; grid-template-columns: 40px 40px 40px; grid-template-rows: 40px 40px; gap: 0.2em; place-items: center; }
+        .arrow-btn { width: 38px; height: 38px; font-size: 1.3em; border-radius: 6px; background: #444; color: #fff; border: 1px solid #888; }
+        .layer-table { margin-top: 0.5em; width: 100%; }
+        .layer-table th, .layer-table td { text-align: center; padding: 0.2em 0.5em; }
+        .layer-btn { width: 48px; height: 32px; margin-bottom: 0.3em; background: #444; color: #fff; border: 1px solid #888; }
+        .toggle-btn { width: 60px; height: 32px; margin-bottom: 0.3em; background: #444; color: #fff; border: 1px solid #888; }
+        canvas { background: #fff; border: 1px solid #fff; border-radius: 8px; display: block; }
+        label { margin-right: 0.5em; }
+        .callout-box {
+            position: absolute;
+            background: #fff;
+            border: 1.5px solid #aaa;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #222;
+            text-align: center;
+            width: 32px;
+            height: 22px;
+            box-shadow: 0 0 3px #0001;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #copingButtonsBar {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            text-align: left;
+        }
+        #toggleFractions {
+            margin-top: 4px;
+            background: #ffe;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px 12px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        #imageCanvasContainer {
+            margin-top: 16px;
+        }
+        #imageCanvas {
+            margin-top: 8px;
+        }
+        #uploadImageBtn {
+            margin-top: 10px;
+            margin-bottom: 8px;
+            background: #eaf7ff;
+            border: 1px solid #99c;
+            border-radius: 4px;
+            padding: 4px 12px;
+            font-size: 1em;
+            cursor: pointer;
+            display: block;
+        }
+        #imageInput {
+            display: none;
+        }
+    </style>
+</head>
+<body onload="brython({debug:2}); setTimeout(function() { console.log('Delayed init'); window.initCopingApp && window.initCopingApp(); }, 1000);">  <!-- Added delayed initialization -->
+<div id="container">
+    <div style="position: relative;">
+        <!-- CANVAS 1 (main drawing) -->
+        <canvas id="drawArea" width="400" height="400" style="width:400px; height:400px; position:relative;"></canvas>
+        <div id="copingButtonsBar">
+            <button id="toggleCopingBump1" style="margin:4px 8px;">Set Coping Bump 1</button>
+            <button id="toggleCopingBump2" style="margin:4px 8px;">Set Coping Bump 2</button>
+            <button id="toggleFractions" style="margin:4px 8px;">Show Fractions</button>
+        </div>
+        <!-- CANVAS 2 (image upload and coping bump lines) -->
+        <div id="imageCanvasContainer">
+            <canvas id="imageCanvas" width="400" height="400" tabindex="1" style="width:400px; height:400px; position:relative;"></canvas>
+            <input type="file" id="imageInput" accept="image/*" style="display:none;" />
+            <button id="uploadImageBtn">Upload Picture</button>
+            <div id="copingButtonsBar_img">
+                <button id="toggleCopingBump1_img" style="margin:4px 8px;">Set Coping Bump 1 (Img)</button>
+                <button id="toggleCopingBump2_img" style="margin:4px 8px;">Set Coping Bump 2 (Img)</button>
+                <button id="measureCopingBtn" style="margin:4px 8px;">Measure Coping</button>
+                <input id="copingMeasureInput" type="text" min="0" step="any" placeholder="Enter coping (inches)" style="display:none; width:140px; margin-top:4px;" />
+                <button id="setScaleBtn" style="display:none; margin-left:4px;">Set Scale</button>
+                <button id="toggleFractions_img" style="margin:4px 8px;">Show Fractions</button>
+            </div>
+            <div style="color:#666;font-size:14px;">
+                Select a picture and it will be displayed on the canvas above.
+            </div>
+        </div>
+    </div>
+    <div id="controls">
+        <div class="control-section">
+            <h3>Pipe Settings</h3>
+            <div class="input-row">
+                <label>Pipe Size (in): <input type="text" id="pipeDiameter" value="2.375" /></label>
+            </div>
+            <div class="input-row">
+                <label>Pipe Wall (in): <input type="text" id="pipeWall" value="1/8" /></label>
+            </div>
+        </div>
+        <div class="control-section">
+            <h3>Ramp Geometry</h3>
+            <div class="input-row">
+                <label>Transition Radius (ft): <input type="text" id="transitionRadius" value="6.0" /></label>
+            </div>
+            <div class="input-row">
+                <label>Ramp Height (ft): <input type="text" id="rampHeight" value="3.0" /></label>
+            </div>
+            <div style="font-size: 12px; color: #666; margin-top: 8px;" id="geometryInfo">
+                Standard 3ft mini ramp with 6ft transition radius
+            </div>
+        </div>
+        <div class="control-section">
+            <h3>Move Pipe</h3>
+            <div class="arrow-panel">
+                <div class="arrow-grid">
+                    <button class="arrow-btn" id="arrowUp" style="grid-column:2; grid-row:1;">&#8593;</button>
+                    <button class="arrow-btn" id="arrowLeft" style="grid-column:1; grid-row:2;">&#8592;</button>
+                    <button class="arrow-btn" id="arrowDown" style="grid-column:2; grid-row:2;">&#8595;</button>
+                    <button class="arrow-btn" id="arrowRight" style="grid-column:3; grid-row:2;">&#8594;</button>
+                </div>
+            </div>
+        </div>
+        <div class="control-section">
+            <h3>Top Layer (Wood)</h3>
+            <table class="layer-table">
+                <tr>
+                    <th>1/4</th>
+                    <th>3/8</th>
+                    <th>1/2</th>
+                    <th>3/4</th>
+                </tr>
+                <tr id="topLayerToggleRow"></tr>
+                <tr id="topLayerBtnRow"></tr>
+            </table>
+        </div>
+        <div class="control-section">
+            <h3>Ramp Face</h3>
+            <table class="layer-table">
+                <tr>
+                    <th>1/4</th>
+                    <th>3/8</th>
+                    <th>1/2</th>
+                </tr>
+                <tr id="rampFaceToggleRow"></tr>
+                <tr id="rampFaceBtnRow"></tr>
+            </table>
+        </div>
+    </div>
+</div>
+<div id="calloutLayer"></div>
+<script type="text/python">
+
+# ------ CANVAS 2: IMAGE UPLOAD + INDEPENDENT COPING BUMPS + MEASURE COPING + SCALE + ZOOM ------
+
+
+# ------ CANVAS 2: IMAGE UPLOAD + INDEPENDENT COPING BUMPS + MEASURE COPING + SCALE + ZOOM ------
+from browser import document, html, bind, window
+import math
+
+image_canvas = document["imageCanvas"]
+image_ctx = image_canvas.getContext("2d")
+
+show_fractions_img = False
+
+canvas2_zoom = 1.0
+canvas2_cx = 350 // 2
+canvas2_cy = 350 // 2
+
+coping_measure_active_img = False
+coping_measure_pts_img = []
+coping_measure_value_img = None
+coping_measure_scale_img = None
+
+def gcd(a, b):
+    while b: a, b = b, a % b
+    return a
+
+def parse_fraction_input(val):
+    try:
+        val = val.strip()
+        if ' ' in val:
+            whole, frac = val.split()
+            num, denom = frac.split('/')
+            return float(whole) + float(num) / float(denom)
+        elif '/' in val:
+            num, denom = val.split('/')
+            return float(num) / float(denom)
+        else:
+            return float(val)
+    except Exception:
+        return None
+
+def to_fraction(val, denom=8):
+    frac = round(val * denom)
+    whole = frac // denom
+    num = frac % denom
+    if num == 0:
+        return f'{whole}"'
+    divider = gcd(num, denom)
+    num, denom = num // divider, denom // divider
+    if whole == 0:
+        return f'{num}/{denom}"'
+    else:
+        return f'{whole} {num}/{denom}"'
+
+def round_nearest_0125(val): return round(val * 8) / 8
+
+def format_measurement_img(val):
+    if show_fractions_img:
+        return to_fraction(round_nearest_0125(val), 8)
+    else:
+        return f'{round_nearest_0125(val):.3f}"'
+
+def get_scale_factor():
+    if coping_measure_scale_img:
+        return (1.0 / coping_measure_scale_img) * canvas2_zoom
+    return 60 * canvas2_zoom
+
+def to_canvas_coords_img(x, y):
+    sc = get_scale_factor()
+    cx = canvas2_cx
+    cy = canvas2_cy
+    return (cx + x * sc, cy - y * sc)
+
+def from_canvas_coords_img(xc, yc):
+    sc = get_scale_factor()
+    cx = canvas2_cx
+    cy = canvas2_cy
+    return ((xc - cx) / sc, (cy - yc) / sc)
+
+def deg2rad(deg): return deg * math.pi / 180
+
+def physical_length_in_inches(p1, p2):
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
+    px_dist = math.hypot(dx, dy)
+    if coping_measure_scale_img:
+        return px_dist * coping_measure_scale_img
+    else:
+        return px_dist / (60 * canvas2_zoom)
+
+def draw_line_pts_img(p1, p2, color="#111", width=2, alpha=1.0, dash=None):
+    image_ctx.save()
+    image_ctx.beginPath()
+    image_ctx.moveTo(p1[0], p1[1])
+    image_ctx.lineTo(p2[0], p2[1])
+    image_ctx.strokeStyle = color
+    image_ctx.lineWidth = width
+    image_ctx.globalAlpha = alpha
+    if dash is not None:
+        image_ctx.setLineDash(dash)
+    image_ctx.stroke()
+    image_ctx.setLineDash([])
+    image_ctx.globalAlpha = 1.0
+    image_ctx.restore()
+
+def draw_text_img(txt, x, y, color="#c00", font="bold 13px Arial"):
+    image_ctx.save()
+    image_ctx.font = font
+    image_ctx.textAlign = "center"
+    image_ctx.textBaseline = "middle"
+    image_ctx.fillStyle = color
+    image_ctx.fillText(txt, x, y)
+    image_ctx.restore()
+
+def draw_crosshair_img(center, color="#c00", lw=2, dash=[6,4], width_in=3.75, height_in=0.25, angle_deg=0):
+    cx, cy = center
+    angle = deg2rad(angle_deg)
+    sc = get_scale_factor()
+    # Horizontal (long) line
+    x0 = cx - (width_in * sc / 2) * math.cos(angle)
+    y0 = cy - (width_in * sc / 2) * math.sin(angle)
+    x1 = cx + (width_in * sc / 2) * math.cos(angle)
+    y1 = cy + (width_in * sc / 2) * math.sin(angle)
+    draw_line_pts_img((x0, y0), (x1, y1), color=color, width=lw, dash=dash)
+    # Vertical (short) line
+    angle_perp = angle + math.pi / 2
+    x0v = cx - (height_in * sc / 2) * math.cos(angle_perp)
+    y0v = cy - (height_in * sc / 2) * math.sin(angle_perp)
+    x1v = cx + (height_in * sc / 2) * math.cos(angle_perp)
+    y1v = cy + (height_in * sc / 2) * math.sin(angle_perp)
+    draw_line_pts_img((x0v, y0v), (x1v, y1v), color=color, width=lw, dash=dash)
+
+def get_default_pipes_and_points_img():
+    # For image canvas, use the same angles as the main canvas for consistency
+    # Get the current ramp geometry from the main canvas
+    geom = calculate_transition_geometry()
+    ramp_angle = geom['ramp_angle']
+    
+    p1 = [-2, 2]
+    p2 = [-2, 2.25]
+    center_x = -2
+    center_y = 2.625
+    offset = 0.375 / 2
+    
+    # Use the dynamically calculated ramp angle (negative for left-facing ramp)
+    angle_rad = deg2rad(-ramp_angle)  # Using negative ramp angle for correct direction
+    
+    dx = offset * math.cos(angle_rad)
+    dy = offset * math.sin(angle_rad)
+    p3 = [center_x - dx, center_y - dy]
+    p4 = [center_x + dx, center_y + dy]
+    return p1, p2, p3, p4
+
+move_lines_img = [
+    {
+        "p1": None, "p2": None, "dragging": 0, "color": "#c00",
+        "vlen": 0.25, "hlen": 3.75, "angle1": 0, "angle2": 0, "show": False, "label": "P1/P2"
+    },
+    {
+        "p1": None, "p2": None, "dragging": 0, "color": "#009",
+        "vlen": 0.25, "hlen": 3.75, "angle1": -231, "angle2": -231, "show": False, "label": "P3/P4"
+    }
+]
+coping_bump1_active_img = False
+coping_bump2_active_img = False
+coping_bump_mid_pos_img = [(0, 0), (0, 0)]
+coping_bump_mid_drag_idx_img = None
+coping_bump_mid_drag_offset_img = (0, 0)
+
+def draw_scene_img(ev=None):
+    """Draw the image canvas with all overlays"""
+    print("Drawing image canvas scene")
+    try:
+        # ---- Draw the image with zoom and pan ----
+        img = getattr(window, "_uploaded_image", None)
+        image_ctx.save()
+        image_ctx.clearRect(0, 0, image_canvas.width, image_canvas.height)
+        
+        if img:
+            print("Drawing uploaded image to canvas")
+            # Center and scale image using transform
+            image_ctx.translate(canvas2_cx, canvas2_cy)
+            image_ctx.scale(canvas2_zoom, canvas2_zoom)
+            image_ctx.translate(-canvas2_cx, -canvas2_cy)
+            try:
+                image_ctx.drawImage(img, 0, 0, image_canvas.width, image_canvas.height)
+                print("Image drawn successfully")
+            except Exception as e:
+                print("Error drawing image:", e)
+        else:
+            # Draw a placeholder if no image
+            image_ctx.font = "16px Arial"
+            image_ctx.fillStyle = "#666"
+            image_ctx.textAlign = "center"
+            image_ctx.fillText("No image uploaded yet", image_canvas.width/2, image_canvas.height/2)
+            
+        image_ctx.restore()
+
+        # --- Draw measure feature ---
+        if len(coping_measure_pts_img) == 1 and coping_measure_active_img:
+            x0, y0 = coping_measure_pts_img[0]
+            mx = getattr(window, "lastCopingMouseX", x0)
+            my = getattr(window, "lastCopingMouseY", y0)
+            draw_line_pts_img((x0, y0), (mx, my), color="#d22", width=2, dash=[6,6])
+            for pt in [(x0, y0), (mx, my)]:
+                image_ctx.save()
+                image_ctx.beginPath()
+                image_ctx.arc(pt[0], pt[1], 4, 0, 2*math.pi)
+                image_ctx.fillStyle = "#d22"
+                image_ctx.fill()
+                image_ctx.restore()
+        elif len(coping_measure_pts_img) == 2:
+            p0, p1 = coping_measure_pts_img
+            draw_line_pts_img(p0, p1, color="#d22", width=2, dash=[6,6])
+            for pt in [p0, p1]:
+                image_ctx.save()
+                image_ctx.beginPath()
+                image_ctx.arc(pt[0], pt[1], 4, 0, 2*math.pi)
+                image_ctx.fillStyle = "#d22"
+                image_ctx.fill()
+                image_ctx.restore()
+            dist_inches = physical_length_in_inches(p0, p1)
+            mx = (p0[0] + p1[0]) / 2
+            my = (p0[1] + p1[1]) / 2 - 20
+            draw_text_img(f"Measure: {format_measurement_img(dist_inches)}", mx, my, color="#d22")
+
+        # --- Draw moveable coping bumps on image canvas ---
+        for idx, mline in enumerate(move_lines_img):
+            if not mline.get("show", True): continue
+            px, py = 0, 0  # No pipe position offset for image canvas
+            p1, p2 = mline["p1"], mline["p2"]
+            if p1 is None or p2 is None:
+                continue
+
+            p1_canvas = to_canvas_coords_img(p1[0], p1[1])
+            p2_canvas = to_canvas_coords_img(p2[0], p2[1])
+
+            draw_line_pts_img(p1_canvas, p2_canvas, color=mline["color"], width=2, dash=[8, 5])
+
+            # Calculate distance
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+            dist = math.hypot(dx, dy)
+
+            # Draw measurement label
+            mx = (p1_canvas[0] + p2_canvas[0]) / 2
+            my = (p1_canvas[1] + p2_canvas[1]) / 2
+
+            # Calculate perpendicular offset for label
+            line_dx = p2_canvas[0] - p1_canvas[0]
+            line_dy = p2_canvas[1] - p1_canvas[1]
+            line_length = math.hypot(line_dx, line_dy)
+            if line_length != 0:
+                perp_x, perp_y = -line_dy / line_length, line_dx / line_length
+            else:
+                perp_x, perp_y = 0, 0
+
+            label_x = mx + perp_x * 22
+            label_y = my + perp_y * 22
+            draw_text_img(format_measurement_img(dist), label_x, label_y, color=mline["color"])
+
+            # Draw crosshairs
+            draw_crosshair_img(
+                p1_canvas, color=mline["color"], lw=2, dash=[6,4],
+                width_in=mline["hlen"] * canvas2_zoom, height_in=mline["vlen"] * canvas2_zoom,
+                angle_deg=mline["angle1"]
+            )
+            draw_crosshair_img(
+                p2_canvas, color=mline["color"], lw=2, dash=[6,4],
+                width_in=mline["hlen"] * canvas2_zoom, height_in=mline["vlen"] * canvas2_zoom,
+                angle_deg=mline["angle2"]
+            )
+
+            # Store midpoint for dragging
+            mid = ((p1[0] + p2[0])/2, (p1[1] + p2[1])/2)
+            coping_bump_mid_pos_img[idx] = to_canvas_coords_img(mid[0], mid[1])
+
+            # Draw midpoint drag handle
+            image_ctx.save()
+            image_ctx.beginPath()
+            image_ctx.arc(coping_bump_mid_pos_img[idx][0], coping_bump_mid_pos_img[idx][1], 5, 0, 2*math.pi)
+            image_ctx.fillStyle = "#f44"
+            image_ctx.globalAlpha = 0.85
+            image_ctx.fill()
+            image_ctx.strokeStyle = "#222"
+            image_ctx.lineWidth = 1.2
+            image_ctx.stroke()
+            image_ctx.restore()
+
+        # Draw zoom info
+        image_ctx.save()
+        image_ctx.font = "bold 12px Arial"
+        image_ctx.textAlign = "right"
+        image_ctx.textBaseline = "top"
+        image_ctx.fillStyle = "#333"
+        image_ctx.fillText(f"Zoom: {canvas2_zoom*100:.0f}%", 390, 16)
+        image_ctx.restore()
+        print("Image canvas drawing complete")
+    except Exception as e:
+        print("Error drawing image scene:", e)
+
+def is_in_grab_point(mx, my, gx, gy):
+    return math.hypot(mx-gx, my-gy) < 12
+
+def is_in_crosshair_img(mx, my, cx, cy, w, h, angle_deg):
+    dx = mx - cx
+    dy = my - cy
+    theta = -math.pi * angle_deg / 180
+    local_x = dx * math.cos(theta) - dy * math.sin(theta)
+    local_y = dx * math.sin(theta) + dy * math.cos(theta)
+    return (abs(local_x) < w/2*get_scale_factor()+8 and abs(local_y) < h/2*get_scale_factor()+8)
+
+def start_drag_img(ev):
+    global coping_bump_mid_drag_idx_img, coping_bump_mid_drag_offset_img
+    mx, my = ev.offsetX, ev.offsetY
+    image_canvas.style.cursor = "default"  # Reset cursor initially
+    
+    # Check for coping bump midpoints (prioritize these)
+    for idx, mline in enumerate(move_lines_img):
+        if mline["show"] and mline["p1"] and mline["p2"]:
+            cx, cy = coping_bump_mid_pos_img[idx]
+            if math.hypot(mx - cx, my - cy) < 9:
+                coping_bump_mid_drag_idx_img = idx
+                coping_bump_mid_drag_offset_img = (mx - cx, my - cy)
+                image_canvas.style.cursor = "move"  # Set move cursor for dragging
+                return
+    
+    # Check for crosshair dragging points
+    for idx, mline in enumerate(move_lines_img):
+        if not mline.get("show", True): continue
+        for ptidx in [1, 2]:
+            pt = mline["p%d" % ptidx]
+            if pt is None: continue
+            cpt = to_canvas_coords_img(pt[0], pt[1])
+            if is_in_crosshair_img(mx, my, cpt[0], cpt[1], mline["hlen"], mline["vlen"], mline["angle%d" % ptidx]):
+                mline["dragging"] = ptidx
+                image_canvas.style.cursor = "move"  # Set move cursor for dragging
+                return
+
+@bind(image_canvas, "mousedown")
+def handle_image_canvas_mousedown(ev):
+    global coping_measure_active_img, coping_measure_pts_img
+    if coping_measure_active_img:
+        mx, my = ev.offsetX, ev.offsetY
+        if len(coping_measure_pts_img) == 0:
+            coping_measure_pts_img.append((mx, my))
+        elif len(coping_measure_pts_img) == 1:
+            coping_measure_pts_img.append((mx, my))
+            document["copingMeasureInput"].style.display = "inline"
+            document["setScaleBtn"].style.display = "inline"
+            document["copingMeasureInput"].value = ""
+            document["copingMeasureInput"].focus()
+            draw_scene_img()
+        draw_scene_img()
+        return
+    start_drag_img(ev)
+
+@bind(image_canvas, "wheel")
+def handle_canvas2_wheel(ev):
+    global canvas2_zoom
+    ev.preventDefault()
+    if ev.deltaY < 0:
+        canvas2_zoom *= 1.1
+    else:
+        canvas2_zoom /= 1.1
+    canvas2_zoom = max(0.1, min(10.0, canvas2_zoom))
+    draw_scene_img()
+
+is_dragging_img = False
+last_drag_pos = {'x': 0, 'y': 0}
+
+@bind(image_canvas, "mousedown")
+def start_drag_img_pan(ev):
+    global is_dragging_img, last_drag_pos
+    is_dragging_img = True
+    last_drag_pos['x'] = ev.clientX
+    last_drag_pos['y'] = ev.clientY
+    image_canvas.style.cursor = "grabbing"
+
+@bind(window, "mouseup")
+def stop_drag_img_pan(ev):
+    global is_dragging_img
+    is_dragging_img = False
+    image_canvas.style.cursor = "grab"
+
+@bind(window, "mousemove")
+def do_drag_img_pan(ev):
+    global is_dragging_img, last_drag_pos, canvas2_cx, canvas2_cy
+    if is_dragging_img:
+        dx = ev.clientX - last_drag_pos['x']
+        dy = ev.clientY - last_drag_pos['y']
+        canvas2_cx += dx
+        canvas2_cy += dy
+        last_drag_pos['x'] = ev.clientX
+        last_drag_pos['y'] = ev.clientY
+        draw_scene_img()
+
+@bind(image_canvas, "mousemove")
+def track_mouse_for_coping(ev):
+    # Update cursor position for measuring
+    if coping_measure_active_img and len(coping_measure_pts_img) == 1:
+        window.lastCopingMouseX = ev.offsetX
+        window.lastCopingMouseY = ev.offsetY
+        image_canvas.style.cursor = "crosshair"  # Ensure crosshair cursor during measurement
+        draw_scene_img()
+    elif not coping_measure_active_img:
+        # Check if we're over an interactive element
+        mx, my = ev.offsetX, ev.offsetY
+        cursor_set = False
+        
+        # Check midpoints first (they're easier to hit)
+        for idx, mline in enumerate(move_lines_img):
+            if mline["show"] and mline["p1"] and mline["p2"]:
+                cx, cy = coping_bump_mid_pos_img[idx]
+                if math.hypot(mx - cx, my - cy) < 9:
+                    image_canvas.style.cursor = "pointer"
+                    cursor_set = True
+                    break
+        
+        # Then check crosshairs
+        if not cursor_set:
+            for idx, mline in enumerate(move_lines_img):
+                if not mline.get("show", True): continue
+                for ptidx in [1, 2]:
+                    pt = mline["p%d" % ptidx]
+                    if pt is None: continue
+                    cpt = to_canvas_coords_img(pt[0], pt[1])
+                    if is_in_crosshair_img(mx, my, cpt[0], cpt[1], mline["hlen"], mline["vlen"], mline["angle%d" % ptidx]):
+                        image_canvas.style.cursor = "pointer"
+                        cursor_set = True
+                        break
+                if cursor_set: break
+        
+        # Default cursor if not over anything
+        if not cursor_set and not any(mline["dragging"] for mline in move_lines_img) and coping_bump_mid_drag_idx_img is None:
+            image_canvas.style.cursor = "default"
+
+@bind(document, "mousemove")
+def do_drag_img(ev):
+    global coping_bump_mid_drag_idx_img, coping_bump_mid_drag_offset_img
+    moved = False
+    
+    # Handle dragging
+    if coping_bump_mid_drag_idx_img is not None:
+        rect = image_canvas.getBoundingClientRect()
+        mx, my = ev.clientX - rect.left, ev.clientY - rect.top
+        cx, cy = coping_bump_mid_pos_img[coping_bump_mid_drag_idx_img]
+        dx = (mx - coping_bump_mid_drag_offset_img[0]) - cx
+        dy = (my - coping_bump_mid_drag_offset_img[1]) - cy
+        sc = get_scale_factor()
+        dx_in = dx / sc
+        dy_in = -dy / sc
+        mline = move_lines_img[coping_bump_mid_drag_idx_img]
+        for pt in ["p1", "p2"]:
+            if mline[pt]:
+                mline[pt][0] = mline[pt][0] + dx_in
+                mline[pt][1] = mline[pt][1] + dy_in
+        moved = True
+        image_canvas.style.cursor = "move"  # Set move cursor during drag
+        
+    for idx, mline in enumerate(move_lines_img):
+        if not mline.get("show", True): continue
+        if mline["dragging"]:
+            rect = image_canvas.getBoundingClientRect()
+            x = ev.clientX - rect.left
+            y = ev.clientY - rect.top
+            lx, ly = from_canvas_coords_img(x, y)
+            ptidx = mline["dragging"]
+            if idx == 1:
+                angle = math.pi * mline["angle1"] / 180
+                if ptidx == 1:
+                    anchor = mline["p2"]
+                else:
+                    anchor = mline["p1"]
+                dx = lx - anchor[0]
+                dy = ly - anchor[1]
+                ux = math.cos(angle)
+                uy = math.sin(angle)
+                proj = dx * ux + dy * uy
+                proj = round_nearest_0125(proj)
+                new_x = anchor[0] + proj * ux
+                new_y = anchor[1] + proj * uy
+                if ptidx == 1:
+                    mline["p1"][0] = new_x
+                    mline["p1"][1] = new_y
+                else:
+                    mline["p2"][0] = new_x
+                    mline["p2"][1] = new_y
+            else:
+                mline["p%d" % ptidx][1] = round_nearest_0125(ly)
+            moved = True
+            image_canvas.style.cursor = "move"  # Set move cursor during drag
+            
+    if moved:
+        draw_scene_img()
+    elif not coping_measure_active_img:
+        # Check if mouse is over any interactive element to update cursor
+        rect = image_canvas.getBoundingClientRect()
+        mx, my = ev.clientX - rect.left, ev.clientY - rect.top
+        cursor_set = False
+        
+        # Check if mouse is over coping bump midpoints
+        for idx, mline in enumerate(move_lines_img):
+            if mline["show"] and mline["p1"] and mline["p2"]:
+                cx, cy = coping_bump_mid_pos_img[idx]
+                if math.hypot(mx - cx, my - cy) < 9:
+                    image_canvas.style.cursor = "pointer"
+                    cursor_set = True
+                    break
+                    
+        # Check if mouse is over any crosshair
+        if not cursor_set:
+            for idx, mline in enumerate(move_lines_img):
+                if not mline.get("show", True): continue
+                for ptidx in [1, 2]:
+                    pt = mline["p%d" % ptidx]
+                    if pt is None: continue
+                    cpt = to_canvas_coords_img(pt[0], pt[1])
+                    if is_in_crosshair_img(mx, my, cpt[0], cpt[1], mline["hlen"], mline["vlen"], mline["angle%d" % ptidx]):
+                        image_canvas.style.cursor = "pointer"
+                        cursor_set = True
+                        break
+                if cursor_set: break
+        
+        if not cursor_set and not coping_measure_active_img:
+            image_canvas.style.cursor = "default"
+
+@bind(document, "mouseup")
+def stop_drag_img(ev):
+    global coping_bump_mid_drag_idx_img
+    coping_bump_mid_drag_idx_img = None
+    for mline in move_lines_img:
+        mline["dragging"] = 0
+    
+    # Reset cursor only if we're not in measurement mode
+    if not coping_measure_active_img:
+        image_canvas.style.cursor = "default"
+
+@bind(document["toggleCopingBump1_img"], "click")
+def set_coping_bump1_img(ev):
+    global coping_bump1_active_img
+    coping_bump1_active_img = not coping_bump1_active_img
+    update_coping_bump_visibility_img()
+    btn = document["toggleCopingBump1_img"]
+    if coping_bump1_active_img:
+        if move_lines_img[0]["p1"] is None or move_lines_img[0]["p2"] is None:
+            p1, p2, _, _ = get_default_pipes_and_points_img()
+            move_lines_img[0]["p1"] = list(p1)
+            move_lines_img[0]["p2"] = list(p2)
+        btn.text = "Unset Coping Bump 1 (Img)"
+    else:
+        move_lines_img[0]["p1"] = None
+        move_lines_img[0]["p2"] = None
+        btn.text = "Set Coping Bump 1 (Img)"
+    draw_scene_img()
+
+@bind(document["toggleCopingBump2_img"], "click")
+def set_coping_bump2_img(ev):
+    global coping_bump2_active_img
+    coping_bump2_active_img = not coping_bump2_active_img
+    update_coping_bump_visibility_img()
+    btn = document["toggleCopingBump2_img"]
+    if coping_bump2_active_img:
+        if move_lines_img[1]["p1"] is None or move_lines_img[1]["p2"] is None:
+            _, _, p3, p4 = get_default_pipes_and_points_img()
+            move_lines_img[1]["p1"] = list(p3)
+            move_lines_img[1]["p2"] = list(p4)
+        btn.text = "Unset Coping Bump 2 (Img)"
+    else:
+        move_lines_img[1]["p1"] = None
+        move_lines_img[1]["p2"] = None
+        btn.text = "Set Coping Bump 2 (Img)"
+    draw_scene_img()
+
+@bind(document["measureCopingBtn"], "click")
+def start_measure_coping_img(ev):
+    global coping_measure_active_img, coping_measure_pts_img
+    coping_measure_active_img = True
+    coping_measure_pts_img = []
+    document["measureCopingBtn"].disabled = True
+    document["copingMeasureInput"].style.display = "inline"
+    document["setScaleBtn"].style.display = "inline"
+    document["copingMeasureInput"].value = ""
+    image_canvas.style.cursor = "crosshair"  # Set cursor to crosshair for measurement
+    document["copingMeasureInput"].focus()
+    draw_scene_img()
+
+@bind(document["setScaleBtn"], "click")
+def set_scale_btn_handler(ev):
+    global coping_measure_value_img, coping_measure_scale_img, coping_measure_active_img
+    val = document["copingMeasureInput"].value
+    v = parse_fraction_input(val)
+    try:
+        if v and v > 0 and len(coping_measure_pts_img) == 2:
+            coping_measure_value_img = v
+            x0, y0 = coping_measure_pts_img[0]
+            x1, y1 = coping_measure_pts_img[1]
+            pixel_length = math.hypot(x1 - x0, y1 - y0)
+            if pixel_length > 0:
+                coping_measure_scale_img = v / pixel_length
+        document["copingMeasureInput"].style.display = "none"
+        document["setScaleBtn"].style.display = "none"
+        document["measureCopingBtn"].disabled = False
+        coping_measure_active_img = False
+        image_canvas.style.cursor = "default"  # Reset cursor when done
+        draw_scene_img()
+    except Exception:
+        pass
+
+@bind(document["copingMeasureInput"], "keydown")
+def disable_enter(ev):
+    if ev.keyCode == 13:
+        ev.preventDefault()
+
+@bind(document["toggleFractions_img"], "click")
+def toggle_fractions_img(ev):
+    global show_fractions_img
+    show_fractions_img = not show_fractions_img
+    btn = document["toggleFractions_img"]
+    btn.text = "Show Decimals" if show_fractions_img else "Show Fractions"
+    draw_scene_img()
+
+def update_coping_bump_visibility_img():
+    """Updates coping bump visibility and angles for the image canvas"""
+    move_lines_img[0]["show"] = coping_bump1_active_img
+    move_lines_img[1]["show"] = coping_bump2_active_img
+
+    if coping_bump2_active_img:
+        # Get the current geometry and apply the same angles as the main canvas
+        geom = calculate_transition_geometry()
+        ramp_angle = geom['ramp_angle']
+        # Negative for correct direction for coping bump 2
+        move_lines_img[1]["angle1"] = -ramp_angle
+        move_lines_img[1]["angle2"] = -ramp_angle
+
+# ------ IMAGE UPLOAD HOOK ------
+@bind(document["uploadImageBtn"], "click")
+def open_file_dialog(ev):
+    document["imageInput"].click()
+
+@bind(document["imageInput"], "change")
+def upload_image(ev):
+    print("File selected in Python handler")
+    file_obj = document["imageInput"].files[0]
+    if not file_obj: 
+        print("No file selected")
+        return
+    
+    reader = window.FileReader.new()
+    
+    def onload(evt):
+        print("File loaded in FileReader")
+        img = window.Image.new()
+        
+        def on_img_load(evt2):
+            print("Image loaded", img.width, img.height)
+            window._uploaded_image = img
+            draw_scene_img()
+            
+        img.onload = on_img_load
+        img.src = reader.result
+    
+    reader.onload = onload
+    reader.readAsDataURL(file_obj)
+    print("Started file reading process")
+
+# Draw initial scene
+coping_bump1_active_img = False
+coping_bump2_active_img = False
+update_coping_bump_visibility_img()  # Initialize with correct angles
+
+# Make draw_scene_img available globally
+window.draw_scene_img = draw_scene_img
+
+# Draw both canvases
+draw_scene_img()
+
+# Make sure Canvas 1 gets initialized correctly too
+draw_scene()
+# ------ END CANVAS 2 ------
+# ------ END CANVAS 2 ------
+
+# ------ CANVAS 1: MAIN DRAWING, COPING BUMPS, CONTROLS ------
+
+
+# ------ CANVAS 1: MAIN DRAWING, COPING BUMPS, CONTROLS ------
+from browser import document, html, bind, window
+import math
+
+canvas = document["drawArea"]
+ctx = canvas.getContext("2d")
+calloutLayer = document["calloutLayer"]
+
+CANVAS_SIZE = 400
+CENTER_X = CANVAS_SIZE // 2
+CENTER_Y = CANVAS_SIZE // 2
+SCALE = 60
+minSCALE = 5
+maxSCALE = 200
+
+show_fractions = False
+
+def gcd(a, b):
+    while b:
+        a, b = b, a % b
+    return a
+
+def to_fraction(val, denom=8):
+    frac = round(val * denom)
+    whole = frac // denom
+    num = frac % denom
+    if num == 0:
+        return f'{whole}"'
+    divider = gcd(num, denom)
+    num, denom = num // divider, denom // divider
+    if whole == 0:
+        return f'{num}/{denom}"'
+    else:
+        return f'{whole} {num}/{denom}"'
+
+def round_nearest_0125(val):
+    return round(val * 8) / 8
+
+def format_measurement(val):
+    if show_fractions:
+        return to_fraction(val, 8)
+    else:
+        return f'{val:.3f}"'
+
+def round_nearest_025(val):
+    return round(val * 4) / 4
+
+def format_quarter_inch(val):
+    # Don't round unless it's very close to a round value (avoid showing 1" for 1.125")
+    if abs(val - round(val)) < 1e-6:
+        return f'{int(round(val))}"'
+    return f'{val:.3f}"'
+
+def parse_fraction(val):
+    try:
+        val = val.replace(" ", "")
+        if "/" in val:
+            num, denom = val.split("/")
+            return float(num) / float(denom)
+        else:
+            return float(val)
+    except:
+        return 0.0
+
+def calculate_transition_geometry():
+    """Calculate skateboard ramp transition geometry based on radius and height"""
+    global ramp_angle
+    radius_ft = transition_radius
+    height_ft = ramp_height
+
+    # Convert to inches for calculations
+    radius_in = radius_ft * 12
+    height_in = height_ft * 12
+
+    # Calculate angle for given height and radius using circular arc formula
+    # y = r(1 - cos(θ)) where y is height, r is radius
+    if height_in >= radius_in:
+        # Height cannot exceed radius for a circular arc
+        angle_rad = math.pi / 2  # 90 degrees max
+    else:
+        cos_theta = 1 - (height_in / radius_in)
+        angle_rad = math.acos(cos_theta)
+
+    # Convert to degrees
+    angle_deg = math.degrees(angle_rad)
+    
+    # Calculate ramp angle
+    # Based on measurement: for a 6ft radius, 2ft height ramp, we want exactly 231°
+    # For 6ft radius, 2ft height: angle_deg ≈ 39°
+    # To get a universal formula that gives 231° for these specific values:
+    # We need to calibrate our formula to match the physical measurement
+    # With 231° = 270° - angle_deg for the 6ft/2ft test case
+    
+    # Based on the arc geometry, we can calculate the angle more precisely
+    # The standard formula for the ramp angle (assuming horizontal platform at 0°):
+    ramp_angle = 270 - angle_deg
+    
+    # Calculate transition length
+    transition_length_in = radius_in * math.sin(angle_rad)
+
+    # Update geometry info display with more information
+    info_text = f"Angle: {angle_deg:.1f}°, Ramp: {ramp_angle:.1f}°, Length: {transition_length_in/12:.1f}ft"
+    document["geometryInfo"].text = info_text
+
+    return {
+        'angle_deg': angle_deg,
+        'angle_rad': angle_rad,
+        'ramp_angle': ramp_angle,
+        'transition_length_in': transition_length_in,
+        'radius_in': radius_in
+    }
+
+def project_point_perpendicular_to_surface(x, y, thickness, surface_angle_deg):
+    surface_rad = deg2rad(surface_angle_deg)
+    normal_x = math.cos(surface_rad + math.pi/2)
+    normal_y = math.sin(surface_rad + math.pi/2)
+    new_x = x + thickness * normal_x
+    new_y = y + thickness * normal_y
+    return new_x, new_y
+
+def to_canvas_coords(x, y):
+    return (CENTER_X + x * SCALE, CENTER_Y - y * SCALE)
+
+def from_canvas_coords(xc, yc):
+    return ((xc - CENTER_X) / SCALE, (CENTER_Y - yc) / SCALE)
+
+def deg2rad(deg):
+    return deg * math.pi / 180
+
+def draw_line_pts(p1, p2, color="#111", width=2, alpha=1.0, dash=None):
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(p1[0], p1[1])
+    ctx.lineTo(p2[0], p2[1])
+    ctx.strokeStyle = color
+    ctx.lineWidth = width
+    ctx.globalAlpha = alpha
+    if dash is not None:
+        ctx.setLineDash(dash)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.globalAlpha = 1.0
+    ctx.restore()
+
+def draw_text(txt, x, y, color="#c00", bgcolor=None, font="bold 13px Arial"):
+    ctx.save()
+    ctx.font = font
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillStyle = color
+    ctx.fillText(txt, x, y)
+    ctx.restore()
+
+def draw_circle(center, radius_in, color="#99f", fill=True, lw=2, alpha=1.0, transparent_hole=False):
+    x, y = center
+    px_radius = radius_in * SCALE
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(x, y, px_radius, 0, 2*math.pi)
+    ctx.lineWidth = lw
+    ctx.strokeStyle = "#333"
+    ctx.globalAlpha = alpha
+    if fill and not transparent_hole:
+        ctx.fillStyle = color
+        ctx.fill()
+    if transparent_hole:
+        ctx.globalCompositeOperation = "destination-out"
+        ctx.fillStyle = "rgba(0,0,0,1.0)"
+        ctx.fill()
+        ctx.globalCompositeOperation = "source-over"
+    ctx.stroke()
+    ctx.globalAlpha = 1.0
+    ctx.restore()
+
+pipe_pos = [0, 0]
+pipe_diameter = 2.375
+pipe_wall = 0.125
+drag_offset = None
+dragging = False
+
+transition_radius = 6.0  # feet
+ramp_height = 3.0       # feet
+ramp_angle = 240        # degrees - calculated dynamically
+
+top_layer_options = [0.25, 0.375, 0.5, 0.75]
+ramp_face_options = [0.25, 0.375, 0.5]
+top_layers = [0, 0, 0, 0]
+ramp_layers = [0, 0, 0]
+
+coping_bump1_active = False
+coping_bump2_active = False
+
+coping_bump_mid_drag_idx = None
+coping_bump_mid_drag_offset = (0, 0)
+coping_bump_mid_pos = [(0, 0), (0, 0)]  # One for each line
+
+coping_bump_vertical_only = False
+
+move_lines = [
+    {
+        "p1": None,
+        "p2": None,
+        "dragging": 0,
+        "color": "#c00",
+        "vlen": 0.25,
+        "hlen": 2.0,
+        "angle1": 0,
+        "angle2": 0,
+        "show": False,
+        "label": "P1/P2"
+    },
+    {
+        "p1": None,
+        "p2": None,
+        "dragging": 0,
+        "color": "#009",
+        "vlen": 0.25,
+        "hlen": 2.0,
+        "angle1": 120,
+        "angle2": 120,
+        "show": False,
+        "label": "P3/P4"
+    }
+]
+
+def get_default_pipes_and_points():
+    # Coping bump 1 stays on horizontal platform
+    p1 = [-2, 2]
+    p2 = [-2, 2.25]
+
+    # Coping bump 2 uses dynamic ramp angle (negative for correct direction)
+    geom = calculate_transition_geometry()
+    ramp_angle = geom['ramp_angle']
+    center_x = -2
+    center_y = 2.625
+    offset = 0.375 / 2
+
+    # Use negative ramp_angle for correct side
+    angle_rad = deg2rad(-ramp_angle)
+    dx = offset * math.cos(angle_rad)
+    dy = offset * math.sin(angle_rad)
+    p3 = [center_x - dx, center_y - dy]
+    p4 = [center_x + dx, center_y + dy]
+    return p1, p2, p3, p4
+
+def update_coping_bump_visibility():
+    move_lines[0]["show"] = coping_bump1_active
+    move_lines[1]["show"] = coping_bump2_active
+
+    if coping_bump2_active:
+        geom = calculate_transition_geometry()
+        ramp_angle = geom['ramp_angle']
+        # Negative for correct direction for coping bump 2
+        move_lines[1]["angle1"] = -ramp_angle
+        move_lines[1]["angle2"] = -ramp_angle
+
+def draw_crosshair(center, color="#c00", lw=2, dash=[6,4], width_in=2.0, height_in=0.25, angle_deg=0):
+    cx, cy = center
+    angle = deg2rad(angle_deg)
+    x0 = cx - (width_in * SCALE / 2) * math.cos(angle)
+    y0 = cy - (width_in * SCALE / 2) * math.sin(angle)
+    x1 = cx + (width_in * SCALE / 2) * math.cos(angle)
+    y1 = cy + (width_in * SCALE / 2) * math.sin(angle)
+    draw_line_pts((x0, y0), (x1, y1), color=color, width=lw, dash=dash)
+    angle_perp = angle + math.pi / 2
+    x0v = cx - (height_in * SCALE / 2) * math.cos(angle_perp)
+    y0v = cy - (height_in * SCALE / 2) * math.sin(angle_perp)
+    x1v = cx + (height_in * SCALE / 2) * math.cos(angle_perp)
+    y1v = cy + (height_in * SCALE / 2) * math.sin(angle_perp)
+    draw_line_pts((x0v, y0v), (x1v, y1v), color=color, width=lw, dash=dash)
+
+def draw_moveable_measurement_line():
+    for idx, mline in enumerate(move_lines):
+        if not mline.get("show", True): continue
+        px, py = pipe_pos
+        p1, p2 = mline["p1"], mline["p2"]
+        if p1 is None or p2 is None:
+            continue
+        p1_canvas = to_canvas_coords(p1[0], p1[1])
+        p2_canvas = to_canvas_coords(p2[0], p2[1])
+        draw_line_pts(p1_canvas, p2_canvas, color=mline["color"], width=2, dash=[8,5])
+        mx = (p1_canvas[0]+p2_canvas[0])/2
+        my = (p1_canvas[1]+p2_canvas[1])/2
+        
+        # Calculate distance
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+        dist = math.hypot(dx, dy)
+        
+        # Draw the label with the proper offset
+        dx = p2_canvas[0] - p1_canvas[0]
+        dy = p2_canvas[1] - p1_canvas[1]
+        length = math.hypot(dx, dy)
+        if length != 0:
+            perp_x, perp_y = -dy / length, dx / length
+        else:
+            perp_x, perp_y = 0, 0
+        label_x = mx + perp_x * 22
+        label_y = my + perp_y * 22
+        draw_text(format_measurement(dist), label_x, label_y, color=mline["color"])
+        
+        draw_crosshair(
+            p1_canvas, color=mline["color"], lw=2, dash=[6,4],
+            width_in=mline["hlen"], height_in=mline["vlen"],
+            angle_deg=mline["angle1"]
+        )
+        draw_crosshair(
+            p2_canvas, color=mline["color"], lw=2, dash=[6,4],
+            width_in=mline["hlen"], height_in=mline["vlen"],
+            angle_deg=mline["angle2"]
+        )
+
+def get_line_midpoint(p1, p2):
+    return ((p1[0]+p2[0])/2, (p1[1]+p2[1])/2)
+
+def setup_layer_controls():
+    """Create and attach all layer control buttons to the DOM"""
+    print("Setting up layer controls")
+    # Clear existing rows first
+    toggle_row = document["topLayerToggleRow"]
+    btn_row = document["topLayerBtnRow"]
+    toggle_row.innerHTML = ""
+    btn_row.innerHTML = ""
+    
+    # Create top layer controls
+    for i, opt in enumerate(top_layer_options):
+        toggle = html.BUTTON("Single", Id=f"topLayerToggle_{i}", Class="toggle-btn")
+        toggle.bind("click", lambda ev, j=i: toggle_single_double(j, "top"))
+        cell1 = html.TD()
+        cell1 <= toggle
+        toggle_row <= cell1
+        
+        btn = html.BUTTON("Add", Id=f"topLayerBtn_{i}", Class="layer-btn")
+        btn.bind("click", lambda ev, j=i: toggle_layer(j, "top"))
+        cell2 = html.TD()
+        cell2 <= btn
+        btn_row <= cell2
+    
+    # Clear existing ramp face rows
+    toggle_row2 = document["rampFaceToggleRow"]
+    btn_row2 = document["rampFaceBtnRow"]
+    toggle_row2.innerHTML = ""
+    btn_row2.innerHTML = ""
+    
+    # Create ramp face controls
+    for i, opt in enumerate(ramp_face_options):
+        toggle = html.BUTTON("Single", Id=f"rampFaceToggle_{i}", Class="toggle-btn")
+        toggle.bind("click", lambda ev, j=i: toggle_cycle_ramp_toggle(j))
+        cell1 = html.TD()
+        cell1 <= toggle
+        toggle_row2 <= cell1
+        
+        btn = html.BUTTON("Add", Id=f"rampFaceBtn_{i}", Class="layer-btn")
+        btn.bind("click", lambda ev, j=i: toggle_layer(j, "ramp"))
+        cell2 = html.TD()
+        cell2 <= btn
+        btn_row2 <= cell2
+    
+    # Now update the controls to show current state
+    update_layer_controls()
+    print("Layer controls setup complete")
+
+def update_layer_controls():
+    for i, t in enumerate(top_layer_options):
+        btn = document[f"topLayerBtn_{i}"]
+        toggle = document[f"topLayerToggle_{i}"]
+        count = top_layers[i]
+        btn.text = "Add" if count == 0 else f"{count}x"
+        btn.style.background = "#99f" if count > 0 else "#eef"
+        if count == 1:
+            toggle.text = "Single"
+            toggle.style.background = "#ccc"
+        elif count == 2:
+            toggle.text = "Double"
+            toggle.style.background = "#fc9"
+        else:
+            toggle.text = "Single"
+            toggle.style.background = "#ccc"
+        toggle.disabled = count == 0
+    for i, t in enumerate(ramp_face_options):
+        btn = document[f"rampFaceBtn_{i}"]
+        toggle = document[f"rampFaceToggle_{i}"]
+        count = ramp_layers[i]
+        if i == 1:
+            btn.text = "Add" if count == 0 else f"{count}x"
+            if count == 1:
+                toggle.text = "Single"
+                toggle.style.background = "#ccc"
+            elif count == 2:
+                toggle.text = "Double"
+                toggle.style.background = "#fc9"
+            elif count == 3:
+                toggle.text = "Triple"
+                toggle.style.background = "#f99"
+            else:
+                toggle.text = "Single"
+                toggle.style.background = "#ccc"
+            toggle.disabled = count == 0
+        else:
+            btn.text = "Add" if count == 0 else f"{count}x"
+            if count == 1:
+                toggle.text = "Single"
+                toggle.style.background = "#ccc"
+            elif count == 2:
+                toggle.text = "Double"
+                toggle.style.background = "#fc9"
+            else:
+                toggle.text = "Single"
+                toggle.style.background = "#ccc"
+            toggle.disabled = count == 0
+
+def toggle_layer(idx, which):
+    if which == "top":
+        top_layers[idx] = (top_layers[idx] + 1) % 3
+    else:
+        if idx == 1:
+            ramp_layers[idx] = (ramp_layers[idx] + 1) % 4  # 0,1,2,3 for 3/8
+        else:
+            ramp_layers[idx] = (ramp_layers[idx] + 1) % 3
+    update_layer_controls()
+    draw_scene()
+
+def toggle_single_double(idx, which):
+    if which == "top":
+        if top_layers[idx] == 1:
+            top_layers[idx] = 2
+        elif top_layers[idx] == 2:
+            top_layers[idx] = 1
+    else:
+        if idx != 1:
+            if ramp_layers[idx] == 1:
+                ramp_layers[idx] = 2
+            elif ramp_layers[idx] == 2:
+                ramp_layers[idx] = 1
+        else:
+            toggle_cycle_ramp_toggle(idx)
+    update_layer_controls()
+    draw_scene()
+
+def toggle_cycle_ramp_toggle(idx):
+    if ramp_layers[idx] == 1:
+        ramp_layers[idx] = 2
+    elif ramp_layers[idx] == 2:
+        ramp_layers[idx] = 3
+    elif ramp_layers[idx] == 3:
+        ramp_layers[idx] = 1
+    else:
+        ramp_layers[idx] = 1
+    update_layer_controls()
+    draw_scene()
+
+setup_layer_controls()
+
+def point_on_line_b_to_node(pc, outer_r):
+    q2x = pc[0] + outer_r * SCALE
+    q3y = pc[1] + outer_r * SCALE
+    node = (q2x, q3y)
+
+    geom = calculate_transition_geometry()
+    ang_b = deg2rad(geom['ramp_angle'])
+
+    x0, y0 = CENTER_X, CENTER_Y
+    x1 = x0 + math.cos(ang_b) * 200
+    y1 = y0 - math.sin(ang_b) * 200
+    if y1 != y0:
+        t = (q3y - y0) / (y1 - y0)
+        x_b = x0 + t * (x1 - x0)
+    else:
+        x_b = x0
+    return (x_b, q3y), node
+
+def point_on_line_a_to_node(pc, outer_r):
+    q2x = pc[0] + outer_r * SCALE
+    q3y = pc[1] + outer_r * SCALE
+    node = (q2x, q3y)
+    return (q2x, CENTER_Y), node
+
+def distance_inch(p1, p2):
+    dx = (p2[0] - p1[0]) / SCALE
+    dy = -(p2[1] - p1[1]) / SCALE
+    return math.hypot(dx, dy)
+
+def draw_measure_label(x1, y1, x2, y2, val, color="#c00", offset=18, location="below"):
+    mx = (x1 + x2) / 2
+    my = (y1 + y2) / 2
+    dx = x2 - x1
+    dy = y2 - y1
+    length = math.hypot(dx, dy)
+    if length == 0:
+        perp_x, perp_y = 0, 0
+    else:
+        perp_x, perp_y = -dy / length, dx / length
+    if location == "below":
+        label_x = mx + perp_x * offset
+        label_y = my + perp_y * offset
+    elif location == "righttight":
+        label_x = mx + offset
+        label_y = my + offset * 0.3
+    else:
+        label_x = mx + perp_x * offset
+        label_y = my + perp_y * offset
+    draw_text(format_measurement(val), label_x, label_y, color=color)
+
+def draw_node_to_line_measurements(pc, outer_r):
+    q2x = pc[0] + outer_r * SCALE
+    q3y = pc[1] + outer_r * SCALE
+    node = (q2x, q3y)
+    b_start, node1 = point_on_line_b_to_node(pc, outer_r)
+    draw_line_pts(b_start, node1, "#c00", 2, 1.0, dash=[6,3])
+    dist_b = distance_inch(b_start, node1)
+    draw_measure_label(b_start[0], b_start[1], node1[0], node1[1], dist_b, offset=32, location="below")
+    a_start, node2 = point_on_line_a_to_node(pc, outer_r)
+    draw_line_pts(a_start, node2, "#c00", 2, 1.0, dash=[6,3])
+    dist_a = distance_inch(a_start, node2)
+    callout_x = node2[0] + 25
+    callout_y = node2[1] + -30
+    draw_text(format_measurement(dist_a), callout_x, callout_y, color="#c00")
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(node[0], node[1], 7, 0, 2*math.pi)
+    ctx.fillStyle = "#c00"
+    ctx.globalAlpha = 0.6
+    ctx.fill()
+    ctx.restore()
+
+def show_panel_callouts():
+    while len(calloutLayer.childNodes) > 0:
+        calloutLayer.removeChild(calloutLayer.childNodes[0])
+    top_thick = 0
+    for i, cnt in enumerate(top_layers):
+        top_thick += cnt * top_layer_options[i]
+    ramp_thick = 0
+    for i, cnt in enumerate(ramp_layers):
+        ramp_thick += cnt * ramp_face_options[i]
+    if top_thick > 0:
+        geom = calculate_transition_geometry()
+        ramp_length = geom['transition_length_in'] / 12  # Convert to feet
+
+        x1 = CENTER_X + 175
+        x2 = CENTER_X + ramp_length * SCALE
+        midx = int((x1 + x2) // 2)
+        midy = CENTER_Y - 30
+        box = html.DIV(format_quarter_inch(top_thick), Class="callout-box")
+        box.style.left = f"{canvas.offsetLeft + midx - 16}px"
+        box.style.top = f"{canvas.offsetTop + midy}px"
+        calloutLayer <= box
+    if ramp_thick > 0:
+        geom = calculate_transition_geometry()
+        angle_b = deg2rad(geom['ramp_angle'])
+        ramp_length = geom['transition_length_in'] / 12  # Convert to feet
+
+        x = int(CENTER_X + ramp_length * SCALE * math.cos(angle_b) * 0.33) - 35
+        y = int(CENTER_Y - ramp_length * SCALE * math.sin(angle_b) * 0.33) + 150
+        box2 = html.DIV(format_quarter_inch(ramp_thick), Class="callout-box")
+        box2.style.left = f"{canvas.offsetLeft + x - 16}px"
+        box2.style.top = f"{canvas.offsetTop + y}px"
+        calloutLayer <= box2
+
+def draw_scene(ev=None):
+    """Main drawing function for canvas 1"""
+    print("Drawing main canvas scene")
+    try:
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+        # Calculate current ramp geometry
+        geom = calculate_transition_geometry()
+        ramp_length = geom['transition_length_in'] / 12  # Convert to feet for drawing
+
+        origin = (CENTER_X, CENTER_Y)
+        
+        # Draw coordinate axes for debugging
+        ctx.save()
+        ctx.beginPath()
+        ctx.moveTo(0, CENTER_Y)
+        ctx.lineTo(canvas.width, CENTER_Y)
+        ctx.strokeStyle = "#444"
+        ctx.lineWidth = 1
+        ctx.setLineDash([5, 5])
+        ctx.stroke()
+        
+        ctx.beginPath()
+        ctx.moveTo(CENTER_X, 0)
+        ctx.lineTo(CENTER_X, canvas.height)
+        ctx.stroke()
+        ctx.restore()
+
+        # Draw base ramp lines using calculated geometry
+        # Horizontal platform
+        draw_line_pts(origin, (origin[0] + ramp_length * SCALE, origin[1]), "#222", 3)
+
+        # Transition surface at calculated angle
+        transition_angle = geom['ramp_angle']
+        draw_line_pts(origin, (
+            origin[0] + ramp_length * SCALE * math.cos(deg2rad(transition_angle)),
+            origin[1] - ramp_length * SCALE * math.sin(deg2rad(transition_angle))
+        ), "#222", 3)
+
+        # Draw top wood layers (horizontal platform) with proper perpendicular offset
+        offset = 0
+        for i, cnt in enumerate(top_layers):
+            for c in range(cnt):
+                offset += top_layer_options[i]
+                draw_parallel_line(origin, 0, ramp_length, offset, "#0a8", 3, alpha=0.7)
+
+        # Draw ramp face layers with perpendicular projection at dynamic angle
+        offset = 0
+        for i, cnt in enumerate(ramp_layers):
+            for c in range(cnt):
+                offset += ramp_face_options[i]
+                draw_parallel_line_perpendicular(origin, transition_angle, ramp_length, offset, "#08f", 3, alpha=0.7)
+
+        # Draw pipe
+        px, py = pipe_pos
+        pc = to_canvas_coords(px, py)
+        inner_r = max(0.1, pipe_diameter/2)
+        wall_r = max(0.01, pipe_wall)
+        outer_r = inner_r + wall_r
+
+        # Draw measurement lines from pipe to ramp surfaces
+        draw_node_to_line_measurements(pc, outer_r)
+
+        # Draw pipe circles
+        draw_circle(pc, outer_r, "rgba(100,180,255,0.24)", fill=True, lw=2, alpha=1.0)
+        draw_circle(pc, inner_r, "#fff", fill=True, lw=2, alpha=1.0, transparent_hole=True)
+        draw_circle(pc, outer_r, "#06c", fill=False, lw=2, alpha=1.0)
+        draw_circle(pc, inner_r, "#06c", fill=False, lw=2, alpha=1.0)
+
+        # Draw coping bumps (crosshairs and lines)
+        draw_moveable_measurement_line()
+        for idx, mline in enumerate(move_lines):
+            if mline["show"] and mline["p1"] and mline["p2"]:
+                mid = get_line_midpoint(mline["p1"], mline["p2"])
+                coping_bump_mid_pos[idx] = to_canvas_coords(mid[0], mid[1])
+                ctx.save()
+                ctx.beginPath()
+                ctx.arc(coping_bump_mid_pos[idx][0], coping_bump_mid_pos[idx][1], 5, 0, 2*math.pi)
+                ctx.fillStyle = "#f44"
+                ctx.globalAlpha = 0.85
+                ctx.fill()
+                ctx.strokeStyle = "#222"
+                ctx.lineWidth = 1.2
+                ctx.stroke()
+                ctx.restore()
+
+        show_panel_callouts()
+        print("Main canvas drawing complete")
+    except Exception as e:
+        print("Error drawing scene:", e)
+
+@bind(document["pipeDiameter"], "change")
+def on_pipe_diameter(ev):
+    global pipe_diameter
+    pipe_diameter = max(0.25, parse_fraction(document["pipeDiameter"].value))
+    set_default_coping_bump_positions()
+    draw_scene()
+
+@bind(document["pipeWall"], "change")
+def on_pipe_wall(ev):
+    global pipe_wall
+    pipe_wall = max(0.01, parse_fraction(document["pipeWall"].value))
+    set_default_coping_bump_positions()
+    draw_scene()
+
+@bind(document["transitionRadius"], "change")
+def on_transition_radius(ev):
+    global transition_radius
+    new_radius = parse_fraction(document["transitionRadius"].value)
+    if new_radius > 0:
+        transition_radius = new_radius
+        set_default_coping_bump_positions()  # Update coping bump positions
+        update_coping_bump_visibility()      # Update angles for main canvas
+        update_coping_bump_visibility_img()  # Update angles for image canvas
+        draw_scene()
+        draw_scene_img()  # Redraw image canvas with updated angles
+
+@bind(document["rampHeight"], "change")
+def on_ramp_height(ev):
+    global ramp_height
+    new_height = parse_fraction(document["rampHeight"].value)
+    if new_height > 0:
+        ramp_height = new_height
+        set_default_coping_bump_positions()  # Update coping bump positions
+        update_coping_bump_visibility()      # Update angles for main canvas
+        update_coping_bump_visibility_img()  # Update angles for image canvas
+        draw_scene()
+        draw_scene_img()  # Redraw image canvas with updated angles
+
+def setup_arrow_buttons():
+    """Set up the arrow button click handlers"""
+    print("Setting up arrow buttons")
+    try:
+        # Unbind first if already bound
+        for btn_id in ["arrowUp", "arrowDown", "arrowLeft", "arrowRight"]:
+            btn = document[btn_id]
+            btn.unbind("click") if hasattr(btn, "unbind") else None
+        
+        # Bind the buttons to their respective functions
+        document["arrowUp"].bind("click", move_up)
+        document["arrowDown"].bind("click", move_down)
+        document["arrowLeft"].bind("click", move_left)
+        document["arrowRight"].bind("click", move_right)
+        print("Arrow buttons set up successfully")
+    except Exception as e:
+        print("Error setting up arrow buttons:", e)
+
+@bind(document["arrowUp"], "click")
+def move_up(ev): 
+    print("Move up clicked")
+    move_pipe(0, 0.01)
+
+@bind(document["arrowDown"], "click")
+def move_down(ev): 
+    print("Move down clicked")
+    move_pipe(0, -0.01)
+
+@bind(document["arrowLeft"], "click")
+def move_left(ev): 
+    print("Move left clicked")
+    move_pipe(-0.01, 0)
+
+@bind(document["arrowRight"], "click")
+def move_right(ev): 
+    print("Move right clicked")
+    move_pipe(0.01, 0)
+
+def move_pipe(dx, dy):
+    pipe_pos[0] += dx
+    pipe_pos[1] += dy
+    set_default_coping_bump_positions()
+    draw_scene()
+
+def is_in_crosshair(mx, my, cx, cy, w, h, angle_deg):
+    dx = mx - cx
+    dy = my - cy
+    theta = -deg2rad(angle_deg)
+    local_x = dx * math.cos(theta) - dy * math.sin(theta)
+    local_y = dx * math.sin(theta) + dy * math.cos(theta)
+    return (abs(local_x) < w/2*SCALE+8 and abs(local_y) < h/2*SCALE+8)
+
+@bind(canvas, "mousedown")
+def start_drag(ev):
+    global dragging, drag_offset
+    global coping_bump_mid_drag_idx, coping_bump_mid_drag_offset
+    global coping_bump_vertical_only
+    mx, my = ev.offsetX, ev.offsetY
+    for idx, mline in enumerate(move_lines):
+        if mline["show"] and mline["p1"] and mline["p2"]:
+            cx, cy = coping_bump_mid_pos[idx]
+            if math.hypot(mx - cx, my - cy) < 9:
+                coping_bump_mid_drag_idx = idx
+                coping_bump_mid_drag_offset = (mx - cx, my - cy)
+                return
+    for idx, mline in enumerate(move_lines):
+        if not mline.get("show", True): continue
+        for ptidx in [1, 2]:
+            pt = mline["p%d" % ptidx]
+            if pt is None: continue
+            cpt = to_canvas_coords(pt[0], pt[1])
+            if is_in_crosshair(mx, my, cpt[0], cpt[1], mline["hlen"], mline["vlen"], mline["angle%d" % ptidx]):
+                mline["dragging"] = ptidx
+                coping_bump_vertical_only = True
+                return
+    x, y = from_canvas_coords(mx, my)
+    px, py = pipe_pos
+    inner_r = max(0.1, pipe_diameter/2)
+    wall_r = max(0.01, pipe_wall)
+    outer_r = inner_r + wall_r
+    dist = math.hypot(x-px, y-py)
+    if dist <= outer_r:
+        dragging = True
+        drag_offset = (x - px, y - py)
+
+@bind(document, "mousemove")
+def do_drag(ev):
+    global dragging
+    global coping_bump_mid_drag_idx, coping_bump_mid_drag_offset
+    if coping_bump_mid_drag_idx is not None:
+        rect = canvas.getBoundingClientRect()
+        mx, my = ev.clientX - rect.left, ev.clientY - rect.top
+        cx, cy = coping_bump_mid_pos[coping_bump_mid_drag_idx]
+        dx = (mx - coping_bump_mid_drag_offset[0]) - cx
+        dy = (my - coping_bump_mid_drag_offset[1]) - cy
+        dx_in = dx / SCALE
+        dy_in = -dy / SCALE
+        mline = move_lines[coping_bump_mid_drag_idx]
+        for pt in ["p1", "p2"]:
+            if mline[pt]:
+                mline[pt][0] = mline[pt][0] + dx_in
+                mline[pt][1] = mline[pt][1] + dy_in
+        draw_scene()
+        return
+    for idx, mline in enumerate(move_lines):
+        if not mline.get("show", True): continue
+        if mline["dragging"]:
+            rect = canvas.getBoundingClientRect()
+            x = ev.clientX - rect.left
+            y = ev.clientY - rect.top
+            lx, ly = from_canvas_coords(x, y)
+            ptidx = mline["dragging"]
+            if idx == 0:
+                if ptidx == 1:
+                    mline["p1"][1] = round_nearest_0125(ly)
+                else:
+                    mline["p2"][1] = round_nearest_0125(ly)
+            else:
+                angle = deg2rad(mline["angle1"])
+                if ptidx == 1:
+                    anchor = mline["p2"]
+                else:
+                    anchor = mline["p1"]
+                dx = lx - anchor[0]
+                dy = ly - anchor[1]
+                ux = math.cos(angle)
+                uy = math.sin(angle)
+                proj = dx * ux + dy * uy
+                proj = round_nearest_0125(proj)
+                new_x = anchor[0] + proj * ux
+                new_y = anchor[1] + proj * uy
+                if ptidx == 1:
+                    mline["p1"][0] = new_x
+                    mline["p1"][1] = new_y
+                else:
+                    mline["p2"][0] = new_x
+                    mline["p2"][1] = new_y
+            draw_scene()
+            return
+    if not dragging: return
+    rect = canvas.getBoundingClientRect()
+    x = ev.clientX - rect.left
+    y = ev.clientY - rect.top
+    lx, ly = from_canvas_coords(x, y)
+    offx, offy = drag_offset
+    pipe_pos[0] = lx - offx
+    pipe_pos[1] = ly - offy
+    set_default_coping_bump_positions()
+    draw_scene()
+
+@bind(document, "mouseup")
+def stop_drag(ev):
+    global dragging, coping_bump_mid_drag_idx, coping_bump_vertical_only
+    dragging = False
+    coping_bump_mid_drag_idx = None
+    coping_bump_vertical_only = False
+    for mline in move_lines:
+        mline["dragging"] = 0
+
+def draw_parallel_line(origin, angle_deg, length_in, offset_inch, color, width, alpha=1.0):
+    ang = deg2rad(angle_deg)
+    dx = offset_inch * math.sin(ang)
+    dy = offset_inch * math.cos(ang)
+    new_origin = (origin[0] + dx * SCALE, origin[1] - dy * SCALE)
+    return draw_line_pts(new_origin, (
+        new_origin[0]+length_in*SCALE*math.cos(deg2rad(angle_deg)),
+        new_origin[1]-length_in*SCALE*math.sin(deg2rad(angle_deg))
+    ), color, width, alpha, dash=None)
+
+def draw_curved_transition(origin, geom):
+    radius_in = geom['radius_in'] 
+    angle_rad = geom['angle_rad']
+    num_points = 20
+    points = []
+    for i in range(num_points + 1):
+        t = i / num_points
+        theta = angle_rad * t
+        x = radius_in * math.sin(theta) / 12  # Convert to feet
+        y = radius_in * (1 - math.cos(theta)) / 12  # Convert to feet
+        canvas_x = origin[0] + x * SCALE
+        canvas_y = origin[1] - y * SCALE
+        points.append((canvas_x, canvas_y))
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(points[0][0], points[0][1])
+    for i in range(1, len(points)):
+        ctx.lineTo(points[i][0], points[i][1])
+    ctx.strokeStyle = "#444"
+    ctx.lineWidth = 2
+    ctx.setLineDash([4, 4])
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.restore()
+
+def draw_skateboard_surface_layer(origin, geom, thickness_offset, color, width, alpha=1.0):
+    radius_in = geom['radius_in']
+    angle_rad = geom['angle_rad']
+    layer_radius_in = radius_in - thickness_offset
+    if layer_radius_in <= 0:
+        return
+    num_points = 20
+    points = []
+    for i in range(num_points + 1):
+        t = i / num_points
+        theta = angle_rad * t
+        x = layer_radius_in * math.sin(theta) / 12  # Convert to feet
+        y = layer_radius_in * (1 - math.cos(theta)) / 12  # Convert to feet
+        canvas_x = origin[0] + x * SCALE
+        canvas_y = origin[1] - y * SCALE
+        points.append((canvas_x, canvas_y))
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(points[0][0], points[0][1])
+    for i in range(1, len(points)):
+        ctx.lineTo(points[i][0], points[i][1])
+    ctx.strokeStyle = color
+    ctx.lineWidth = width
+    ctx.globalAlpha = alpha
+    ctx.stroke()
+    ctx.globalAlpha = 1.0
+    ctx.restore()
+
+def draw_parallel_line_perpendicular(origin, angle_deg, length_in, offset_inch, color, width, alpha=1.0):
+    ang = deg2rad(angle_deg)
+    perp_angle = angle_deg - 90
+    perp_rad = deg2rad(perp_angle)
+    dx = offset_inch * math.cos(perp_rad)
+    dy = offset_inch * math.sin(perp_rad)
+    new_origin = (origin[0] + dx * SCALE, origin[1] - dy * SCALE)
+    return draw_line_pts(new_origin, (
+        new_origin[0] + length_in * SCALE * math.cos(ang),
+        new_origin[1] - length_in * SCALE * math.sin(ang)
+    ), color, width, alpha, dash=None)
+
+@bind(canvas, "wheel")
+def on_mouse_wheel(ev):
+    ev.preventDefault()
+    global SCALE
+    rect = canvas.getBoundingClientRect()
+    mouse_x = ev.clientX - rect.left
+    mouse_y = ev.clientY - rect.top
+    wx, wy = from_canvas_coords(mouse_x, mouse_y)
+    if ev.deltaY < 0:
+        new_scale = SCALE * 1.14
+    else:
+        new_scale = SCALE / 1.14
+    new_scale = max(minSCALE, min(maxSCALE, new_scale))
+    global CENTER_X, CENTER_Y
+    CENTER_X = CANVAS_SIZE // 2
+    CENTER_Y = CANVAS_SIZE // 2
+    SCALE = new_scale
+    draw_scene()
+
+def set_default_coping_bump_positions():
+    p1, p2, p3, p4 = get_default_pipes_and_points()
+    if coping_bump1_active and move_lines[0]["p1"] is None and move_lines[0]["p2"] is None:
+        move_lines[0]["p1"] = list(p1)
+        move_lines[0]["p2"] = list(p2)
+    if coping_bump2_active and move_lines[1]["p1"] is None and move_lines[1]["p2"] is None:
+        move_lines[1]["p1"] = list(p3)
+        move_lines[1]["p2"] = list(p4)
+
+@bind(document["toggleCopingBump1"], "click")
+def set_coping_bump1(ev):
+    global coping_bump1_active
+    coping_bump1_active = not coping_bump1_active
+    update_coping_bump_visibility()
+    btn = document["toggleCopingBump1"]
+    if coping_bump1_active:
+        if move_lines[0]["p1"] is None or move_lines[0]["p2"] is None:
+            p1, p2, _, _ = get_default_pipes_and_points()
+            move_lines[0]["p1"] = list(p1)
+            move_lines[0]["p2"] = list(p2)
+        btn.text = "Unset Coping Bump 1"
+    else:
+        move_lines[0]["p1"] = None
+        move_lines[0]["p2"] = None
+        btn.text = "Set Coping Bump 1"
+    draw_scene()
+
+@bind(document["toggleCopingBump2"], "click")
+def set_coping_bump2(ev):
+    global coping_bump2_active
+    coping_bump2_active = not coping_bump2_active
+    update_coping_bump_visibility()
+    btn = document["toggleCopingBump2"]
+    if coping_bump2_active:
+        if move_lines[1]["p1"] is None or move_lines[1]["p2"] is None:
+            _, _, p3, p4 = get_default_pipes_and_points()
+            move_lines[1]["p1"] = list(p3)
+            move_lines[1]["p2"] = list(p4)
+        btn.text = "Unset Coping Bump 2"
+    else:
+        move_lines[1]["p1"] = None
+        move_lines[1]["p2"] = None
+        btn.text = "Set Coping Bump 2"
+    draw_scene()
+
+@bind(document["toggleFractions"], "click")
+def toggle_show_fractions(ev):
+    global show_fractions
+    show_fractions = not show_fractions
+    btn = document["toggleFractions"]
+    btn.text = "Show Decimals" if show_fractions else "Show Fractions"
+    draw_scene()
+
+pipe_diameter = 2.375
+pipe_wall = 0.125
+transition_radius = 6.0
+ramp_height = 3.0
+
+# Initialize form values
+document["pipeDiameter"].value = "2.375"
+document["pipeWall"].value = "1/8"
+document["transitionRadius"].value = "6.0"
+document["rampHeight"].value = "3.0"
+
+# Set up UI controls
+try:
+    # Create layer controls
+    setup_layer_controls()
+    # Make sure they're updated
+    update_layer_controls()
+except Exception as e:
+    print("Error setting up layer controls:", e)
+
+# Initialize coping bumps
+coping_bump1_active = False
+coping_bump2_active = False
+update_coping_bump_visibility()
+draw_scene()  # Make sure this runs
+
+# Export ALL critical functions to window object for JavaScript access
+def export_all_functions_to_window():
+    """Export all critical functions to the window object for JavaScript access"""
+    try:
+        # Main canvas functions
+        window.draw_scene = draw_scene
+        window.setup_layer_controls = setup_layer_controls
+        window.update_layer_controls = update_layer_controls
+        window.toggle_layer = toggle_layer
+        window.toggle_single_double = toggle_single_double
+        window.toggle_cycle_ramp_toggle = toggle_cycle_ramp_toggle
+        window.move_pipe = move_pipe
+        window.calculate_transition_geometry = calculate_transition_geometry
+        window.update_coping_bump_visibility = update_coping_bump_visibility
+        window.draw_parallel_line = draw_parallel_line
+        window.draw_parallel_line_perpendicular = draw_parallel_line_perpendicular
+        window.set_default_coping_bump_positions = set_default_coping_bump_positions
+        window.setup_arrow_buttons = setup_arrow_buttons
+        
+        # Ensure we export both the original name and the alias
+        if not hasattr(window, "draw_main_scene"):
+            window.draw_main_scene = draw_scene
+        
+        print("Successfully exported all functions to window")
+    except Exception as e:
+        print("Error exporting functions to window:", e)
+
+# Run the export function
+export_all_functions_to_window()
+
+# ------ END CANVAS 1 ------
+
+# Final initialization to ensure everything starts correctly
+print("Python script fully loaded")
+try:
+    # Initialize the layer controls
+    setup_layer_controls()
+    update_layer_controls()
+    update_coping_bump_visibility()
+    
+    # Setup arrow buttons
+    setup_arrow_buttons()
+    
+    # Draw both canvases
+    print("Drawing main canvas")
+    draw_scene()
+    print("Drawing image canvas")
+    draw_scene_img()
+    
+    # Export functions again to be sure
+    export_all_functions_to_window()
+    
+    print("Initialization complete")
+except Exception as e:
+    print("Error during final initialization:", e)
+
+</script>
+<!-- PATCH: Add JavaScript for image upload and draw to canvas 2 -->
+<script>
+(function() {
+    var input = document.getElementById('imageInput');
+    var button = document.getElementById('uploadImageBtn');
+    var canvas = document.getElementById('imageCanvas');
+    var ctx = canvas.getContext('2d');
+    var uploadedImg = null;
+
+    button.addEventListener('click', function() {
+        input.value = "";
+        input.click();
+    });
+
+    input.addEventListener('change', function() {
+        var file = input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = new window.Image();
+            img.onload = function() {
+                uploadedImg = img;
+                // Draw the image, scaled to fit in the canvas, centered
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                var w = img.width, h = img.height;
+                var scale = Math.min(canvas.width/w, canvas.height/h, 1);
+                var dw = Math.floor(w * scale), dh = Math.floor(h * scale);
+                var x = Math.floor((canvas.width - dw) / 2);
+                var y = Math.floor((canvas.height - dh) / 2);
+                ctx.drawImage(img, x, y, dw, dh);
+                // Optionally: trigger Brython overlay redraw
+                if (window.draw_scene_img) window.draw_scene_img();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // Optional: make Brython able to redraw the image before overlays
+    window._draw_uploaded_image_on_canvas2 = function() {
+        if (!uploadedImg) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        var w = uploadedImg.width, h = uploadedImg.height;
+        var scale = Math.min(canvas.width/w, canvas.height/h, 1);
+        var dw = Math.floor(w * scale), dh = Math.floor(h * scale);
+        var x = Math.floor((canvas.width - dw) / 2);
+        var y = Math.floor((canvas.height - dh) / 2);
+        ctx.drawImage(uploadedImg, x, y, dw, dh);
+    };
+})();
+</script>
+<!-- Add a script to ensure both canvases are initialized properly -->
+<script>
+// First check if Brython is properly initialized
+console.log("Page loaded - checking Brython initialization");
+
+// Add a global initialization function
+window.initCopingApp = function() {
+    console.log("Manual initialization triggered");
+    
+    // Make sure all required functions are properly exported to window
+    try {
+        // Make sure calculate_transition_geometry is available first as other functions depend on it
+        if (!window.calculate_transition_geometry && typeof brython !== 'undefined') {
+            console.log("Trying to reexport calculate_transition_geometry");
+            // Force Brython to reevaluate and export the function
+            brython();
+        }
+        
+        // Initialize the pipe and ramp parameters to defaults
+        document.getElementById('pipeDiameter').value = "2.375";
+        document.getElementById('pipeWall').value = "1/8";
+        document.getElementById('transitionRadius').value = "6.0";
+        document.getElementById('rampHeight').value = "3.0";
+        console.log("Reset form values to defaults");
+        
+        // Ensure the layer controls are set up properly
+        if (window.setup_layer_controls) {
+            console.log("Setting up layer controls");
+            window.setup_layer_controls();
+        }
+        
+        if (window.update_layer_controls) {
+            console.log("Updating layer controls");
+            window.update_layer_controls();
+        }
+        
+        // Setup arrow buttons
+        if (window.setup_arrow_buttons) {
+            console.log("Setting up arrow buttons");
+            window.setup_arrow_buttons();
+        }
+        
+        // Also ensure coping bump visibility is updated
+        if (window.update_coping_bump_visibility) {
+            console.log("Updating coping bump visibility");
+            window.update_coping_bump_visibility();
+        }
+        
+        // Try to manually trigger the drawing functions
+        if (window.draw_scene) {
+            console.log("Calling main scene draw");
+            window.draw_scene();
+        } else {
+            console.error("Main scene draw function not available");
+        }
+        
+        if (window.draw_scene_img) {
+            console.log("Calling image scene draw");
+            window.draw_scene_img();
+        } else {
+            console.error("Image scene draw function not available");
+        }
+        
+        console.log("Manual initialization complete");
+    } catch(e) {
+        console.error("Error during initialization:", e);
+    }
+};
+
+window.addEventListener('load', function() {
+    console.log("Page loaded - preparing to initialize");
+    
+    // Function to check if all required functions are available
+    function checkFunctionsAvailable() {
+        var requiredFunctions = [
+            'draw_scene', 'setup_layer_controls', 'update_layer_controls', 
+            'calculate_transition_geometry', 'update_coping_bump_visibility',
+            'draw_scene_img'
+        ];
+        
+        var missing = requiredFunctions.filter(function(f) { return !window[f]; });
+        return missing.length === 0;
+    }
+    
+    // Define a robust initialization sequence
+    function initializeWithRetry(attempt) {
+        console.log("Initialization attempt #" + attempt);
+        
+        if (attempt > 5) {
+            console.error("Failed to initialize after multiple attempts");
+            return;
+        }
+        
+        try {
+            // Check if functions are available
+            if (!checkFunctionsAvailable()) {
+                console.log("Some functions not available yet, retrying...");
+                setTimeout(function() {
+                    initializeWithRetry(attempt + 1);
+                }, 500 * attempt); // Increasing backoff
+                return;
+            }
+            
+            // Actually initialize
+            window.initCopingApp();
+        } catch(e) {
+            console.error("Error during initialization attempt #" + attempt + ":", e);
+            
+            // Retry with backoff
+            setTimeout(function() {
+                initializeWithRetry(attempt + 1);
+            }, 500 * attempt);
+        }
+    }
+    
+    // Start initialization with retry
+    setTimeout(function() {
+        initializeWithRetry(1);
+    }, 500);
+});
+
+// Add a retry button to the page
+document.addEventListener('DOMContentLoaded', function() {
+    // Create a retry button
+    var retryBtn = document.createElement('button');
+    retryBtn.style.position = 'fixed';
+    retryBtn.style.top = '10px';
+    retryBtn.style.right = '10px';
+    retryBtn.style.zIndex = '9999';
+    retryBtn.style.padding = '8px 12px';
+    retryBtn.style.backgroundColor = '#ff9';
+    retryBtn.style.border = '1px solid #cc0';
+    retryBtn.style.borderRadius = '4px';
+    retryBtn.style.cursor = 'pointer';
+    retryBtn.innerText = 'Reinitialize App';
+    retryBtn.onclick = function() {
+        window.initCopingApp();
+    };
+    document.body.appendChild(retryBtn);
+    
+    // Also create direct buttons for layer controls
+    var layerBtn = document.createElement('button');
+    layerBtn.style.position = 'fixed';
+    layerBtn.style.top = '50px';
+    layerBtn.style.right = '10px';
+    layerBtn.style.zIndex = '9999';
+    layerBtn.style.padding = '8px 12px';
+    layerBtn.style.backgroundColor = '#9f9';
+    layerBtn.style.border = '1px solid #0c0';
+    layerBtn.style.borderRadius = '4px';
+    layerBtn.style.cursor = 'pointer';
+    layerBtn.innerText = 'Reinit Layer Controls';
+    layerBtn.onclick = function() {
+        if (window.setup_layer_controls) window.setup_layer_controls();
+        if (window.update_layer_controls) window.update_layer_controls();
+    };
+    document.body.appendChild(layerBtn);
+    
+    // Add a debug button to check available functions
+    var debugBtn = document.createElement('button');
+    debugBtn.style.position = 'fixed';
+    debugBtn.style.top = '90px';
+    debugBtn.style.right = '10px';
+    debugBtn.style.zIndex = '9999';
+    debugBtn.style.padding = '8px 12px';
+    debugBtn.style.backgroundColor = '#f99';
+    debugBtn.style.border = '1px solid #c00';
+    debugBtn.style.borderRadius = '4px';
+    debugBtn.style.cursor = 'pointer';
+    debugBtn.innerText = 'Debug Functions';
+    debugBtn.onclick = function() {
+        var funcList = [
+            'draw_scene', 'setup_layer_controls', 'update_layer_controls', 
+            'calculate_transition_geometry', 'update_coping_bump_visibility',
+            'draw_scene_img', 'draw_parallel_line', 'draw_parallel_line_perpendicular',
+            'setup_arrow_buttons', 'move_pipe', 'move_up', 'move_down', 'move_left', 'move_right'
+        ];
+        
+        var debugInfo = "Available functions:\n";
+        funcList.forEach(function(funcName) {
+            debugInfo += funcName + ": " + (window[funcName] ? "✓" : "✗") + "\n";
+        });
+        
+        // Check DOM elements
+        debugInfo += "\nDOM Elements:\n";
+        var domElements = [
+            'topLayerToggleRow', 'topLayerBtnRow', 'rampFaceToggleRow', 'rampFaceBtnRow',
+            'arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight',
+            'drawArea', 'imageCanvas'
+        ];
+        
+        domElements.forEach(function(elemId) {
+            var elem = document.getElementById(elemId);
+            debugInfo += elemId + ": " + (elem ? "✓" : "✗");
+            if (elem) {
+                debugInfo += " (children: " + elem.childNodes.length + ")";
+            }
+            debugInfo += "\n";
+        });
+        
+        // Check current state
+        debugInfo += "\nState Values:\n";
+        debugInfo += "Pipe Diameter: " + document.getElementById('pipeDiameter').value + "\n";
+        debugInfo += "Pipe Wall: " + document.getElementById('pipeWall').value + "\n";
+        debugInfo += "Transition Radius: " + document.getElementById('transitionRadius').value + "\n";
+        debugInfo += "Ramp Height: " + document.getElementById('rampHeight').value + "\n";
+        
+        console.log(debugInfo);
+        alert(debugInfo);
+        
+        // Attempt to fix any missing functions
+        if (!window.draw_scene) {
+            console.log("Attempting to fix missing draw_scene by forcing Brython reinit");
+            brython({debug:2});
+            setTimeout(function() {
+                window.initCopingApp && window.initCopingApp();
+            }, 500);
+        }
+    };
+    document.body.appendChild(debugBtn);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ollie Stop Motion Comparator (Both Modes Visible, Split Arrow Colors, Overlay Mix)</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 1em; background: #000; color: #fff; }
+    h2 { color: #fff; }
+    .upload-section, .strip-section, .review-section { margin-bottom: 24px; }
+    .strip-label { font-weight: bold; text-align: center; margin: 14px 0 7px 0; }
+    #stripSection { display: flex; flex-direction: column; gap: 20px;}
+    .strip-col { flex: 1; }
+    .frame-strip { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .strip-frame {
+      position: relative;
+      width: 180px; height: 120px;
+      cursor: pointer;
+      border: 3px solid transparent;
+      box-sizing: border-box;
+      border-radius: 10px;
+      background: #ddd;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      overflow: hidden;
+    }
+    .strip-frame.selected { border: 3px solid #0074D9; box-shadow: 0 0 0 2px #39CCCC; }
+    .frame-label {
+      position:absolute; left:2px; top:2px;
+      background:#0074D9bb; color:white; font-size:13px; padding:1px 6px; border-radius:4px; z-index:2;
+      pointer-events:none;
+    }
+    .callout-btn { margin: 2px 8px; padding: 5px 15px; border-radius:6px; border:none; background:#aaa; color:white; cursor:pointer;}
+    .callout-btn.active { background: #2ecc40; }
+    .callout-btn.done { background: #001f3fa8; }
+    .callout-btn:disabled { opacity:0.4; }
+    .review-dual-container { display: flex; flex-direction: row; justify-content: center; align-items: flex-start; gap: 20px; }
+    .review-panel { display: flex; flex-direction: column; align-items: center; }
+    .review-label { font-weight: bold; margin-bottom: 8px;}
+    .review-img-wrap { position: relative; }
+    .review-img { background: #eee; border-radius: 14px; box-shadow: 0 2px 16px #0002; width: 100%; height: auto;}
+    .draw-canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 10; }
+    .carousel-btns { margin: 16px 0; }
+    .carousel-btns button { margin: 0 10px; padding: 8px 18px; font-size: 1rem; border: none; border-radius: 5px; background: #444; color: white; cursor: pointer;}
+    .carousel-btns button:disabled { background: #222;}
+    #carouselIndicator { margin:8px 0; color:#ccc; font-size:1em;}
+    #thumb-status { color:#ccc; font-size:0.95em; margin-top:8px;}
+    .arrow-help { color: #87cefa; font-size: 1.1em; margin: 0 0 10px 0;}
+    .opacity-section { margin: 0 16px; font-size: 1.2em; display:inline-block; }
+    .opacity-section button { font-size: 1.2em; padding: 4px 12px; border: 1px solid #aaa; border-radius: 4px; background: #eee; cursor: pointer; margin: 0 8px; vertical-align: middle;}
+    .opacity-section button:active { background: #ccc;}
+    .opacity-section span { min-width: 60px; display: inline-block;}
+    #readyBtn { font-size: 1.2em; padding: 10px 32px; margin: 24px auto 0 auto; display: block; background:#2ecc40; color:white; border:none; border-radius:8px; cursor:pointer;}
+    #readyBtn:disabled { background: #aaa; }
+    #stopAnimBtn { margin-left:12px; background:#ff4136; }
+    .overlay-panel { display:flex; flex-direction:column; align-items:center; margin-top:12px;}
+    .overlay-label { font-weight: bold; margin-bottom: 8px;}
+    @media (max-width:1200px) {
+      .review-dual-container { flex-direction: column; gap: 20px; align-items: center;}
+      #overlayCanvas, #overlayDrawCanvas { width: 97vw !important; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Ollie Stop Motion Comparator (Side-by-Side & Overlay Both Visible, Arrow Colors, Overlay Mix)</h2>
+  <div class="upload-section">
+    <label>User Ollie: <input type="file" id="userInput" accept="video/*"></label>
+    <label style="margin-left:18px;">Stock Ollie: <input type="file" id="stockInput" accept="video/*"></label>
+    <button id="generateBtn">Generate 20 Stills Each</button>
+    <span id="thumb-status"></span>
+  </div>
+  <div class="strip-section" id="stripSection" style="display:none;">
+    <div class="strip-col">
+      <div class="strip-label">Select User Ollie Keyframes</div>
+      <div id="userCalloutBtns"></div>
+      <div class="frame-strip" id="userFrameStrip"></div>
+    </div>
+    <div class="strip-col">
+      <div class="strip-label">Select Stock Ollie Keyframes</div>
+      <div id="stockCalloutBtns"></div>
+      <div class="frame-strip" id="stockFrameStrip"></div>
+    </div>
+  </div>
+  <div class="review-section" id="reviewSection" style="display:none;">
+    <div class="arrow-help">Draw green lines/arrows on the User Ollie, and red lines/arrows on the Stock Ollie. All lines are visible in the overlay below. When finished, press <b>Ready</b> to enable overlay mixing and continuous animation.</div>
+    <div class="review-dual-container">
+      <div class="review-panel" style="width: 420px;">
+        <div class="review-label">User Ollie (draw green)</div>
+        <div class="review-img-wrap" style="text-align:center;">
+          <img id="userReviewImg" class="review-img" />
+          <canvas id="userDrawCanvas" class="draw-canvas"></canvas>
+        </div>
+      </div>
+      <div class="review-panel" style="width: 400px;">
+        <div class="review-label">Stock Ollie (draw red)</div>
+        <div class="review-img-wrap" style="text-align:center;">
+          <img id="stockReviewImg" class="review-img" />
+          <canvas id="stockDrawCanvas" class="draw-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+    <button id="readyBtn" disabled>Ready</button>
+    <div id="overlaySection" style="display:none;">
+      <div class="overlay-panel">
+        <div class="overlay-label">Overlay View</div>
+        <span class="opacity-section" id="opacitySection">
+          <button id="opacityDownBtn">▼</button>
+          <span id="opacityDisplay"><b>50</b>% User Ollie</span>
+          <button id="opacityUpBtn">▲</button>
+        </span>
+        <div class="opacity-section">
+            <button id="userVideoLeftBtn">◄</button>
+            <button id="userVideoUpBtn">▲</button>
+            <span>User Video Position</span>
+            <button id="userVideoDownBtn">▼</button>
+            <button id="userVideoRightBtn">►</button>
+        </div>
+        <div id="overlayView" style="text-align:center;position:relative;">
+          <canvas id="overlayCanvas" style="border-radius:16px;box-shadow:0 2px 16px #0002; background:#eee; max-width:98vw;" width="532" height="399"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="carousel-btns">
+      <button id="prevBtn">Prev</button>
+      <button id="nextBtn">Next</button>
+      <button id="animateBtn">Animate</button>
+      <button id="stopAnimBtn" style="display:none;">Stop Animation</button>
+    </div>
+    <div id="carouselIndicator"></div>
+  </div>
+  <video id="userVideo" style="display:none"></video>
+  <video id="stockVideo" style="display:none"></video>
+<script>
+const calloutLabels = [
+  'Jump', 'Pop', 'Drag', 'Level', 'Land'
+];
+let userFrames = [], stockFrames = [];
+let userSelections = Array(5).fill(null); // index in userFrames for each label
+let stockSelections = Array(5).fill(null); // index in stockFrames for each label
+let userArrows = Array(5).fill().map(()=>[]); // array of arrows per selected
+let stockArrows = Array(5).fill().map(()=>[]);
+let userVideoOffsetY = 0, userVideoOffsetX = 0;
+let reviewing = false, currentReviewIdx = 0, animating = false, animationTimer = null;
+
+// DOM
+const userInput = document.getElementById('userInput');
+const stockInput = document.getElementById('stockInput');
+const userVideo = document.getElementById('userVideo');
+const stockVideo = document.getElementById('stockVideo');
+const generateBtn = document.getElementById('generateBtn');
+const thumbStatus = document.getElementById('thumb-status');
+const stripSection = document.getElementById('stripSection');
+const userFrameStrip = document.getElementById('userFrameStrip');
+const stockFrameStrip = document.getElementById('stockFrameStrip');
+const userCalloutBtns = document.getElementById('userCalloutBtns');
+const stockCalloutBtns = document.getElementById('stockCalloutBtns');
+const reviewSection = document.getElementById('reviewSection');
+const userReviewImg = document.getElementById('userReviewImg');
+const stockReviewImg = document.getElementById('stockReviewImg');
+const userDrawCanvas = document.getElementById('userDrawCanvas');
+const stockDrawCanvas = document.getElementById('stockDrawCanvas');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const animateBtn = document.getElementById('animateBtn');
+const carouselIndicator = document.getElementById('carouselIndicator');
+const opacitySection = document.getElementById('opacitySection');
+const opacityDownBtn = document.getElementById('opacityDownBtn');
+const opacityUpBtn = document.getElementById('opacityUpBtn');
+const opacityDisplay = document.getElementById('opacityDisplay');
+const overlayView = document.getElementById('overlayView');
+const overlayCanvas = document.getElementById('overlayCanvas');
+const readyBtn = document.getElementById('readyBtn');
+const overlaySection = document.getElementById('overlaySection');
+const stopAnimBtn = document.getElementById('stopAnimBtn');
+
+// State
+let userURL = null, stockURL = null;
+let userAlpha = 0.5;
+const TARGET_HEIGHT = 400;
+
+function waitForMetadata(videoEl) {
+  return new Promise(resolve => {
+    if (videoEl.readyState >= 1) resolve();
+    else videoEl.onloadedmetadata = () => resolve();
+  });
+}
+function resetAll() {
+  userFrames = []; stockFrames = [];
+  userSelections.fill(null); stockSelections.fill(null);
+  userArrows = Array(5).fill().map(()=>[]);
+  stockArrows = Array(5).fill().map(()=>[]);
+  reviewing = false; currentReviewIdx = 0;
+  stripSection.style.display = 'none';
+  reviewSection.style.display = 'none';
+  overlaySection.style.display = 'none';
+  readyBtn.style.display = '';
+  userCalloutBtns.innerHTML = '';
+  stockCalloutBtns.innerHTML = '';
+  userFrameStrip.innerHTML = '';
+  stockFrameStrip.innerHTML = '';
+  thumbStatus.textContent = '';
+  stopAnimBtn.style.display = "none";
+}
+userInput.addEventListener('change', function(e) {
+  if (userURL) URL.revokeObjectURL(userURL);
+  const file = e.target.files[0]; if (!file) return;
+  userURL = URL.createObjectURL(file); userVideo.src = userURL;
+  resetAll();
+});
+stockInput.addEventListener('change', function(e) {
+  if (stockURL) URL.revokeObjectURL(stockURL);
+  const file = e.target.files[0]; if (!file) return;
+  stockURL = URL.createObjectURL(file); stockVideo.src = stockURL;
+  resetAll();
+});
+
+generateBtn.onclick = async function() {
+  if (!userVideo.src || !stockVideo.src) {
+    thumbStatus.textContent = "Please upload both videos.";
+    return;
+  }
+  stripSection.style.display = 'none';
+  reviewSection.style.display = 'none';
+  overlaySection.style.display = 'none';
+  readyBtn.style.display = '';
+  thumbStatus.textContent = "Extracting frames...";
+  await waitForMetadata(userVideo);
+  await waitForMetadata(stockVideo);
+  userFrames = await extractNFrames(userVideo, 20);
+  stockFrames = await extractNFrames(stockVideo, 20);
+  renderSelectionPhase();
+  stripSection.style.display = '';
+  reviewSection.style.display = '';
+  overlaySection.style.display = 'none';
+  readyBtn.style.display = '';
+  thumbStatus.textContent = "Select all 10 moments per series. Buttons walk you through.";
+  reviewing = true;
+  currentReviewIdx = 0;
+  showReview();
+};
+
+function getLinearTimes(duration, count) {
+  const min = 0.2, max = duration - 0.2;
+  if (max <= min) return [min];
+  const times = [];
+  for (let i = 0; i < count; i++) {
+    let t = min + (i * (max - min)) / (count - 1);
+    times.push(t);
+  }
+  return times;
+}
+async function extractNFrames(videoEl, count) {
+  const duration = videoEl.duration;
+  const times = getLinearTimes(duration, count);
+  const width = videoEl.videoWidth, height = videoEl.videoHeight;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = width; canvas.height = height;
+  let frames = [];
+  for (let i = 0; i < times.length; i++) {
+    await seekVideo(videoEl, times[i]);
+    ctx.clearRect(0,0,width,height);
+    ctx.drawImage(videoEl,0,0,width,height);
+    frames.push(canvas.toDataURL("image/jpeg"));
+  }
+  return frames;
+}
+function seekVideo(videoEl, time) {
+  return new Promise(resolve => {
+    function done() { videoEl.removeEventListener('seeked', done); resolve(); }
+    videoEl.addEventListener('seeked', done);
+    videoEl.currentTime = time;
+  });
+}
+
+// --- Selection Phase
+function renderSelectionPhase() {
+  // Render buttons
+  userCalloutBtns.innerHTML = '';
+  stockCalloutBtns.innerHTML = '';
+  for (let i=0; i<calloutLabels.length; ++i) {
+    let btn1 = document.createElement('button');
+    btn1.className = 'callout-btn' + (userSelections[i]===null && userSelections.slice(0,i).every(x=>x!==null)?' active':'') + (userSelections[i]!==null?' done':'');
+    btn1.textContent = calloutLabels[i];
+    btn1.disabled = userSelections[i]!==null;
+    btn1.onclick = ()=>setCurrentUserSelection(i);
+    userCalloutBtns.appendChild(btn1);
+
+    let btn2 = document.createElement('button');
+    btn2.className = 'callout-btn' + (stockSelections[i]===null && stockSelections.slice(0,i).every(x=>x!==null)?' active':'') + (stockSelections[i]!==null?' done':'');
+    btn2.textContent = calloutLabels[i];
+    btn2.disabled = stockSelections[i]!==null;
+    btn2.onclick = ()=>setCurrentStockSelection(i);
+    stockCalloutBtns.appendChild(btn2);
+  }
+  // Render frame strips
+  renderFrameStrips();
+  // Enable ready once all frames are selected
+  readyBtn.disabled = !userSelections.every(x=>x!==null) || !stockSelections.every(x=>x!==null);
+}
+
+let userCurrentIdx = userSelections.findIndex(x=>x===null), stockCurrentIdx = stockSelections.findIndex(x=>x===null);
+function setCurrentUserSelection(idx) {userCurrentIdx=idx;renderFrameStrips();}
+function setCurrentStockSelection(idx) {stockCurrentIdx=idx;renderFrameStrips();}
+
+function renderFrameStrips() {
+  // User
+  userFrameStrip.innerHTML = '';
+  for (let i=0; i<userFrames.length; ++i) {
+    let div = document.createElement('div');
+    div.className = 'strip-frame';
+    // Highlight if selected
+    let labelIdx = userSelections.indexOf(i);
+    if (labelIdx !== -1) div.classList.add('selected');
+    div.onclick = () => {
+      if (userCurrentIdx<0 || userSelections[userCurrentIdx]!==null) return;
+      userSelections[userCurrentIdx]=i;
+      userCurrentIdx = userSelections.findIndex(x=>x===null);
+      renderSelectionPhase();
+      maybeProceedToReview();
+    };
+    let img = document.createElement('img');
+    img.src = userFrames[i];
+    img.style.width = "100%"; img.style.height="100%";
+    div.appendChild(img);
+    if (labelIdx !== -1) {
+      let lab = document.createElement('div');
+      lab.className = 'frame-label';
+      lab.textContent = calloutLabels[labelIdx];
+      div.appendChild(lab);
+    }
+    userFrameStrip.appendChild(div);
+  }
+  // Stock
+  stockFrameStrip.innerHTML = '';
+  for (let i=0; i<stockFrames.length; ++i) {
+    let div = document.createElement('div');
+    div.className = 'strip-frame';
+    let labelIdx = stockSelections.indexOf(i);
+    if (labelIdx !== -1) div.classList.add('selected');
+    div.onclick = () => {
+      if (stockCurrentIdx<0 || stockSelections[stockCurrentIdx]!==null) return;
+      stockSelections[stockCurrentIdx]=i;
+      stockCurrentIdx = stockSelections.findIndex(x=>x===null);
+      renderSelectionPhase();
+      maybeProceedToReview();
+    };
+    let img = document.createElement('img');
+    img.src = stockFrames[i];
+    img.style.width = "100%"; img.style.height="100%";
+    div.appendChild(img);
+    if (labelIdx !== -1) {
+      let lab = document.createElement('div');
+      lab.className = 'frame-label';
+      lab.textContent = calloutLabels[labelIdx];
+      div.appendChild(lab);
+    }
+    stockFrameStrip.appendChild(div);
+  }
+}
+
+function maybeProceedToReview() {
+  if (userSelections.every(x=>x!==null) && stockSelections.every(x=>x!==null)) {
+    setTimeout(()=>{ // give user a visual cue
+      stripSection.style.display = 'none';
+      reviewSection.style.display = '';
+      overlaySection.style.display = 'none';
+      readyBtn.style.display = '';
+      reviewing = true;
+      currentReviewIdx = 0;
+      showReview();
+      readyBtn.disabled = !userSelections.every(x=>x!==null) || !stockSelections.every(x=>x!==null);
+    }, 300);
+  }
+}
+
+// --- Review & Arrow Drawing Phase
+function showReview() {
+  if (userSelections.some(s => s === null) || stockSelections.some(s => s === null)) return;
+  let userIdx = userSelections[currentReviewIdx];
+  let stockIdx = stockSelections[currentReviewIdx];
+
+  let imgUser = new window.Image();
+  let imgStock = new window.Image();
+  imgUser.onload = imgStock.onload = function() {
+    if (!imgUser.complete || !imgStock.complete) return;
+    let userAspect = imgUser.naturalWidth / imgUser.naturalHeight;
+    let stockAspect = imgStock.naturalWidth / imgStock.naturalHeight;
+    let userWidth = Math.round(userAspect * TARGET_HEIGHT);
+    let stockWidth = Math.round(stockAspect * TARGET_HEIGHT);
+
+    // Side by side always visible
+    userReviewImg.src = imgUser.src;
+    userReviewImg.width = userWidth; userReviewImg.height = TARGET_HEIGHT;
+    stockReviewImg.src = imgStock.src;
+    stockReviewImg.width = stockWidth; stockReviewImg.height = TARGET_HEIGHT;
+    setTimeout(()=>{
+      userDrawCanvas.width = userWidth; userDrawCanvas.height = TARGET_HEIGHT;
+      userDrawCanvas.style.width = userWidth+"px";
+      userDrawCanvas.style.height = TARGET_HEIGHT+"px";
+      stockDrawCanvas.width = stockWidth; stockDrawCanvas.height = TARGET_HEIGHT;
+      stockDrawCanvas.style.width = stockWidth+"px";
+      stockDrawCanvas.style.height = TARGET_HEIGHT+"px";
+      drawArrowsOnCanvas(userDrawCanvas, userArrows[currentReviewIdx], "#00FF00");
+      drawArrowsOnCanvas(stockDrawCanvas, stockArrows[currentReviewIdx], "#FF2222");
+      setupArrowDrawing(userDrawCanvas, userArrows[currentReviewIdx], userWidth, TARGET_HEIGHT, () => drawArrowsOnCanvas(userDrawCanvas, userArrows[currentReviewIdx], "#00FF00"));
+      setupArrowDrawing(stockDrawCanvas, stockArrows[currentReviewIdx], stockWidth, TARGET_HEIGHT, () => drawArrowsOnCanvas(stockDrawCanvas, stockArrows[currentReviewIdx], "#FF2222"));
+    },50);
+
+    // Update overlay as well if overlaySection is enabled
+    if (overlaySection.style.display !== "none") {
+      let canvasW = Math.max(userWidth, stockWidth);
+      overlayCanvas.width = canvasW;
+      overlayCanvas.height = TARGET_HEIGHT;
+      overlayCanvas.style.width = canvasW+"px";
+      overlayCanvas.style.height = TARGET_HEIGHT+"px";
+      drawOverlayCanvas(
+        imgUser, userArrows[currentReviewIdx], imgStock, stockArrows[currentReviewIdx],
+        userAlpha, overlayCanvas.width, overlayCanvas.height, userVideoOffsetY, userVideoOffsetX
+      );
+    }
+    carouselIndicator.textContent =
+      `${calloutLabels[currentReviewIdx]} – Frame ${currentReviewIdx+1} of ${calloutLabels.length}`;
+    prevBtn.disabled = currentReviewIdx===0;
+    nextBtn.disabled = currentReviewIdx===calloutLabels.length-1;
+    animateBtn.disabled = false;
+    stopAnimBtn.style.display = "none";
+  };
+  imgUser.src = userFrames[userIdx];
+  imgStock.src = stockFrames[stockIdx];
+}
+
+// Ready button
+readyBtn.onclick = function() {
+  overlaySection.style.display = '';
+  readyBtn.style.display = 'none';
+  document.getElementById('userVideoUpBtn').onclick = () => { userVideoOffsetY -= 5; showReview(); };
+  document.getElementById('userVideoDownBtn').onclick = () => { userVideoOffsetY += 5; showReview(); };
+  document.getElementById('userVideoLeftBtn').onclick = () => { userVideoOffsetX -= 5; showReview(); };
+  document.getElementById('userVideoRightBtn').onclick = () => { userVideoOffsetX += 5; showReview(); };
+  showReview();
+};
+
+// Overlay mix controls
+function updateOpacityDisplay() {
+  opacityDisplay.innerHTML = `<b>${Math.round(userAlpha*100)}</b>% User Ollie`;
+}
+opacityUpBtn.onclick = function() {
+  userAlpha = Math.min(1, userAlpha+0.05);
+  updateOpacityDisplay(); showReview();
+};
+opacityDownBtn.onclick = function() {
+  userAlpha = Math.max(0, userAlpha-0.05);
+  updateOpacityDisplay(); showReview();
+};
+updateOpacityDisplay();
+
+function drawOverlayCanvas(imgUser, userArrowsList, imgStock, stockArrowsList, alpha, w, h, userOffsetY, userOffsetX) {
+  let ctx = overlayCanvas.getContext('2d');
+  ctx.clearRect(0,0,w,h);
+  if (1-alpha > 0) {
+    ctx.globalAlpha = 1-alpha;
+    let temp = document.createElement('canvas');
+    temp.width = w; temp.height = h;
+    let tctx = temp.getContext('2d');
+    tctx.drawImage(imgStock, 0, 0, w, h);
+    let imgData = tctx.getImageData(0, 0, w, h);
+    let d = imgData.data;
+    for (let i=0; i<d.length; i+=4) {
+      let avg = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      d[i]=d[i+1]=d[i+2]=avg;
+    }
+    tctx.putImageData(imgData, 0, 0);
+    ctx.drawImage(temp, 0, 0, w, h);
+    ctx.globalAlpha = 1.0;
+  }
+  if (alpha > 0) {
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(imgUser, userOffsetX, userVideoOffsetY, w, h);
+    ctx.globalAlpha = 1.0;
+  }
+  stockArrowsList.forEach(arr => drawArrow(ctx, arr.x0, arr.y0, arr.x1, arr.y1, w, h, "#FF2222"));
+  userArrowsList.forEach(arr => drawArrow(ctx, arr.x0, arr.y0, arr.x1, arr.y1, w, h, "#00FF00", userOffsetX, userVideoOffsetY));
+}
+
+function drawArrow(ctx, x0, y0, x1, y1, w, h, color = "#00FF00", offsetX = 0, offsetY = 0) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+
+    const startX = x0 * w + offsetX;
+    const startY = y0 * h + offsetY;
+    const endX = x1 * w + offsetX;
+    const endY = y1 * h + offsetY;
+
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const len = Math.sqrt(dx * dx + dy * dy);
+
+    if (len > 0.01) {
+        const ux = dx / len;
+        const uy = dy / len;
+        const ah = 24;
+        const aw = 12;
+        const px = endX - ah * ux;
+        const py = endY - ah * uy;
+
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(px + aw * uy, py - aw * ux);
+        ctx.lineTo(px - aw * uy, py + aw * ux);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+function drawArrowsOnCanvas(canvas, arrows, color="#00FF00") {
+  let ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  arrows.forEach(arr=>{
+    drawArrow(ctx, arr.x0, arr.y0, arr.x1, arr.y1, canvas.width, canvas.height, color);
+  });
+}
+
+let drawingState = {
+  drawing: false,
+  canvas: null,
+  arrowsArr: null,
+  idx: -1,
+  w: 0, h: 0,
+  redrawFn: null,
+  start: null
+};
+
+function setupArrowDrawing(canvas, specificArrowsArray, w, h, redrawFn) {
+    canvas.onmousedown = function(e) {
+        if (!reviewing) return;
+        let rect = canvas.getBoundingClientRect();
+        drawingState = {
+            drawing: true,
+            canvas: canvas,
+            arrowsArr: specificArrowsArray,
+            w: w,
+            h: h,
+            redrawFn: redrawFn,
+            start: { x: (e.clientX - rect.left) / w, y: (e.clientY - rect.top) / h }
+        };
+    };
+}
+
+window.addEventListener('mouseup', function(e) {
+    if (!drawingState.drawing) return;
+    let { canvas, arrowsArr, w, h, redrawFn, start } = drawingState;
+    let rect = canvas.getBoundingClientRect();
+    let end = { x: (e.clientX - rect.left) / w, y: (e.clientY - rect.top) / h };
+    if (Math.abs(start.x - end.x) + Math.abs(start.y - end.y) > 0.01) {
+        arrowsArr.push({ x0: start.x, y0: start.y, x1: end.x, y1: end.y });
+        redrawFn();
+        renderSelectionPhase();
+        showReview();
+    }
+    drawingState.drawing = false;
+});
+
+window.addEventListener('mousemove', function(e) {
+    if (!drawingState.drawing) return;
+    const { canvas, w, h, redrawFn, start } = drawingState;
+    const rect = canvas.getBoundingClientRect();
+    const current = { x: (e.clientX - rect.left) / w, y: (e.clientY - rect.top) / h };
+    const color = (canvas.id === 'userDrawCanvas') ? '#00FF00' : '#FF2222';
+    
+    redrawFn(); // Redraw existing arrows
+    
+    const ctx = canvas.getContext('2d');
+    drawArrow(ctx, start.x, start.y, current.x, current.y, w, h, color);
+});
+
+
+// Carousel controls and STOP animation
+let animatingStop = false;
+prevBtn.onclick = function() {
+  if (animating) return;
+  if (currentReviewIdx>0) {currentReviewIdx--; showReview();}
+};
+nextBtn.onclick = function() {
+  if (animating) return;
+  if (currentReviewIdx<calloutLabels.length-1) {currentReviewIdx++; showReview();}
+};
+animateBtn.onclick = function() {
+  if (animating) return;
+  animating = true;
+  animatingStop = false;
+  prevBtn.disabled = nextBtn.disabled = animateBtn.disabled = true;
+  stopAnimBtn.style.display = "";
+  let idx = 0;
+  function loopStep() {
+    if (animatingStop) {
+      animating = false;
+      prevBtn.disabled = currentReviewIdx===0;
+      nextBtn.disabled = currentReviewIdx===calloutLabels.length-1;
+      animateBtn.disabled = false;
+      stopAnimBtn.style.display = "none";
+      return;
+    }
+    currentReviewIdx = idx;
+    showReview();
+    idx++;
+    if (idx >= calloutLabels.length) idx = 0;
+    animationTimer = setTimeout(loopStep, 650);
+  }
+  loopStep();
+};
+stopAnimBtn.onclick = function() {
+  animatingStop = true;
+  if (animationTimer) clearTimeout(animationTimer);
+};
+
+</script>
+</body>
+</html>

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RAMP HACKER 1.0</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #fff; background: #000; padding: 1em; }
+    h2 { font-family: 'Brush Script MT', cursive, Arial, sans-serif; font-size: 2.3em; margin-bottom: 0.5em; color: #fff; }
+    #canvas { border: 1.5px solid #fff; background: #fff; }
+    #controls { margin: 10px 0; }
+    #compassControls, #measurementControls, #partialArcControls { margin: 12px 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    #measurementControls input[type="number"] { width: 70px; padding: 2px 4px; background: #333; color: #fff; border: 1px solid #888; }
+    #arcRadiusDisplay { color: #87cefa; margin-left: 14px; font-size: 1.1em; }
+    #arcInfo { margin-top: 8px; color: #87cefa; font-size: 1.02em; }
+    button.active, .arc-btn.active { background: #87cefa !important; color: #000 !important; }
+    .arc-btn, button, .arrows, .arc-radius-btn { padding: 4px 12px; border: 1px solid #888; border-radius: 4px; background: #444; color: #fff; cursor: pointer; }
+    button.arrows, .arc-radius-btn { width: 26px; height: 26px; font-size: 15px; padding: 0; }
+    button:disabled, .arc-btn:disabled, .arc-radius-btn:disabled { background: #222 !important; color: #555 !important; cursor: not-allowed; }
+    #angleInfo { font-size: 1.08em; margin-top: 12px; min-height: 1.4em; }
+    .arc-radius-controls { display: inline-flex; gap: 2px; align-items: center; }
+    @keyframes flashTitle {
+      0% { color: red; }
+      33% { color: yellow; }
+      66% { color: white; }
+      100% { color: red; }
+    }
+    h2.title {
+      font-family: 'Courier New', monospace;
+      font-size: 2.3em;
+      animation: flashTitle 0.8s infinite;
+    }
+  </style>
+</head>
+<body>
+  <h2 class="title">RAMP HACKER 1.0</h2>
+  <div id="controls">
+    <button id="uploadBtn">Upload Image</button>
+    <input type="file" id="imgInput" accept="image/jpeg" style="display:none;" />
+  </div>
+  <div id="measurementControls">
+    <button id="platformBtn">Platform</button>
+    <input id="platformInput" type="number" min="0" step="any" placeholder="in">
+    <button id="heightBtn">Height</button>
+    <input id="heightInput" type="number" min="0" step="any" placeholder="in">
+    <button id="baseBtn">Base</button>
+    <input id="baseInput" type="number" min="0" step="any" placeholder="in">
+    <button id="miscBtn">Misc</button>
+    <input id="miscInput" type="number" min="0" step="any" placeholder="in">
+    <button id="autoCalcBtn">Auto Calc</button>
+    <button id="resetMeasBtn">Reset</button>
+  </div>
+  <div id="compassControls">
+    <button id="placeCompassBtn">Reposition Compass</button>
+    <button id="toggleCompassBtn" class="active">Compass On</button>
+    <span>Size:</span>
+    <button class="arrows" id="sizeMinusBtn">&#8722;</button>
+    <input type="range" id="compassSize" min="50" max="350" value="200">
+    <button class="arrows" id="sizePlusBtn">&#43;</button>
+    <span id="sizeLabel">200 px</span>
+    <span>Rotate:</span>
+    <button class="arrows" id="angleMinusBtn">&#8595;</button>
+    <input type="range" id="compassAngle" min="0" max="359" value="0">
+    <button class="arrows" id="anglePlusBtn">&#8593;</button>
+    <span id="angleLabel">0°</span>
+    <button id="readyBtn" style="display:none;">Ready</button>
+    <button id="resetAnglesBtn">Reset Angles</button>
+  </div>
+  <div id="partialArcControls">
+    <button class="arc-btn" id="setArcCenterBtn">Set Arc Center</button>
+    <button class="arc-btn" id="setArcEndpointsBtn">Set Endpoints</button>
+    <button class="arc-btn" id="resetArcBtn">Reset Arc</button>
+    <button class="arc-btn" id="toggleArcPointsBtn">Show/Hide Handles</button>
+    <button class="arc-btn" id="invertArcBtn">Invert Arc</button>
+    <span id="arcRadiusDisplay" class="arc-radius-controls">
+      <button class="arc-radius-btn" id="arcRadiusDownBtn">&#8595;</button>
+      <span id="arcRadiusValue"></span>
+      <button class="arc-radius-btn" id="arcRadiusUpBtn">&#8593;</button>
+    </span>
+  </div>
+  <canvas id="canvas" width="650" height="400"></canvas>
+  <div id="arcInfo"></div>
+  <div id="angleInfo"></div>
+  <script>
+    // --- STATE ---
+    const MODES = {
+      NONE: 0,
+      MEASUREMENT: 1,
+      PLACE_COMPASS: 2,
+      DRAG_COMPASS: 3,
+      RESIZE_COMPASS: 4,
+      ANGLE_MARKS: 5,
+      PLACE_ARC_CENTER: 6,
+      PLACE_ARC_ENDPOINT: 7,
+      DRAG_ARC: 8
+    };
+    let mode = MODES.NONE;
+    let activeMeas = null; // 'platform', 'height', ...
+    let tempLineStart = null;
+    let lastMousePos = {x:0,y:0};
+
+    // --- IMAGE STATE ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let image = new Image();
+    let imageLoaded = false;
+    let imageZoom = 1;
+    let imageOffset = { x: 0, y: 0 };
+    let isDraggingImage = false, lastDrag = {x:0,y:0};
+
+    // --- MEASUREMENTS STATE ---
+    let measurements = { platform: null, height: null, base: null, misc: null };
+
+    // --- COMPASS STATE ---
+    let compassOn = true;
+    let compassCenter = {x: null, y: null};
+    let compassRadius = 200;
+    let compassAngle = 0;
+    let compassMarks = [];
+    let draggingCompass = false, dragOffset = {x:0,y:0};
+    let draggingMarkIndex = -1;
+    let compassReady = false;
+
+    // --- PARTIAL ARC STATE ---
+    let arcTool = {
+      center: null,
+      radius: 60,
+      endpoints: [null, null],
+      dragging: { type: null, offset: { x: 0, y: 0 } },
+      showPoints: true,
+      invertArc: false
+    };
+
+    // --- UI HOOKUP ---
+    const $ = id => document.getElementById(id);
+    // Measurement
+    $('platformBtn').onclick = () => setMeasMode('platform');
+    $('heightBtn').onclick = () => setMeasMode('height');
+    $('baseBtn').onclick = () => setMeasMode('base');
+    $('miscBtn').onclick = () => setMeasMode('misc');
+    $('autoCalcBtn').onclick = autoCalcMeas;
+    $('resetMeasBtn').onclick = () => {measurements={platform:null,height:null,base:null,misc:null}; syncMeasInputs(); drawAll();}
+    $('platformInput').oninput = () => { if(measurements.platform) measurements.platform.value=parseFloat($('platformInput').value)||null; drawAll();}
+    $('heightInput').oninput = () => { if(measurements.height) measurements.height.value=parseFloat($('heightInput').value)||null; drawAll();}
+    $('baseInput').oninput = () => { if(measurements.base) measurements.base.value=parseFloat($('baseInput').value)||null; drawAll();}
+    $('miscInput').oninput = () => { if(measurements.misc) measurements.misc.value=parseFloat($('miscInput').value)||null; drawAll();}
+    function setMeasMode(which) {
+      mode = MODES.MEASUREMENT; activeMeas = which; tempLineStart = null;
+      canvas.style.cursor = 'crosshair';
+      [...document.querySelectorAll('#measurementControls button')].forEach(b=>b.classList.remove('active'));
+      $(`${which}Btn`).classList.add('active');
+    }
+    function autoCalcMeas() {
+      const keys = ['platform','height','base','misc'];
+      const known = keys.find(k => measurements[k] && measurements[k].value && measurements[k].line);
+      if (!known) return alert('Enter a measurement value and draw all lines first.');
+      const pxLen = getLineLength(measurements[known].line);
+      keys.forEach(k => {
+        if (!measurements[k] || !measurements[k].line) return;
+        if (k === known) return;
+        const otherPx = getLineLength(measurements[k].line);
+        if (otherPx > 0) {
+          measurements[k].value = +(measurements[known].value * otherPx / pxLen).toFixed(2);
+          syncMeasInputs();
+        }
+      });
+      drawAll();
+    }
+    function syncMeasInputs() {
+      $('platformInput').value = (measurements.platform && measurements.platform.value) || '';
+      $('heightInput').value = (measurements.height && measurements.height.value) || '';
+      $('baseInput').value = (measurements.base && measurements.base.value) || '';
+      $('miscInput').value = (measurements.misc && measurements.misc.value) || '';
+    }
+    function getLineLength(line) {
+      if (!line) return 0; const [[x1, y1], [x2, y2]] = line; return Math.hypot(x2-x1, y2-y1);
+    }
+    function getPixelToUnitRatio() {
+      for (const key of ["platform","height","base","misc"]) {
+        const m = measurements[key];
+        if (m && m.line && m.value && m.value > 0) {
+          const px = getLineLength(m.line);
+          return m.value / px;
+        }
+      }
+      return null;
+    }
+    // --- IMAGE UPLOAD + PAN/ZOOM ---
+    $('uploadBtn').onclick = () => { $('imgInput').click(); };
+    $('imgInput').onchange = e => {
+      const file = e.target.files[0]; if (!file) return;
+      imageLoaded = false; imageZoom = 1; imageOffset = { x: 0, y: 0 };
+      const reader = new FileReader();
+      reader.onload = ev => { image.src = ev.target.result; image.onload = ()=>{ imageLoaded=true; drawAll(); }; };
+      reader.readAsDataURL(file);
+    };
+    canvas.addEventListener('wheel', function(e) {
+      if (!imageLoaded) return;
+      e.preventDefault();
+      const mouse = getMouse(e);
+      const ix = (mouse.x - imageOffset.x) / imageZoom;
+      const iy = (mouse.y - imageOffset.y) / imageZoom;
+      let delta = -e.deltaY || e.wheelDelta || -e.detail;
+      let zoomFactor = delta > 0 ? 1.1 : 0.9;
+      let newZoom = Math.max(0.1, Math.min(6, imageZoom * zoomFactor));
+      if (Math.abs(newZoom - imageZoom) < 0.001) return;
+      imageOffset.x -= (ix * newZoom - ix * imageZoom);
+      imageOffset.y -= (iy * newZoom - iy * imageZoom);
+      imageZoom = newZoom;
+      drawAll();
+    }, { passive: false });
+    // --- COMPASS WORKFLOW ---
+    $('placeCompassBtn').onclick = function() {
+      mode = MODES.PLACE_COMPASS;
+      compassReady = false;
+      $('readyBtn').style.display = '';
+      highlightBtn('placeCompassBtn','compassControls');
+      canvas.style.cursor = 'crosshair';
+    };
+    $('toggleCompassBtn').onclick = function() {
+      compassOn = !compassOn;
+      $('toggleCompassBtn').classList.toggle('active', compassOn);
+      $('toggleCompassBtn').textContent = compassOn ? "Compass On" : "Compass Off";
+      drawAll();
+    };
+    $('compassSize').oninput = function() {
+      compassRadius = parseInt(this.value);
+      $('sizeLabel').textContent = compassRadius + " px";
+      drawAll();
+    };
+    $('compassAngle').oninput = function() {
+      compassAngle = parseInt(this.value);
+      $('angleLabel').textContent = compassAngle + "°";
+      drawAll();
+    };
+    $('sizeMinusBtn').onclick = function() {
+      compassRadius = Math.max(50, compassRadius-1); $('compassSize').value = compassRadius; $('sizeLabel').textContent = compassRadius + " px"; drawAll();
+    };
+    $('sizePlusBtn').onclick = function() {
+      compassRadius = Math.min(350, compassRadius+1); $('compassSize').value = compassRadius; $('sizeLabel').textContent = compassRadius + " px"; drawAll();
+    };
+    $('angleMinusBtn').onclick = function() {
+      compassAngle = (compassAngle-1+360)%360; $('compassAngle').value=compassAngle; $('angleLabel').textContent = compassAngle + "°"; drawAll();
+    };
+    $('anglePlusBtn').onclick = function() {
+      compassAngle = (compassAngle+1)%360; $('compassAngle').value=compassAngle; $('angleLabel').textContent = compassAngle + "°"; drawAll();
+    };
+    $('readyBtn').onclick = function() {
+      compassReady = true; mode = MODES.ANGLE_MARKS;
+      $('readyBtn').style.display = 'none';
+      highlightBtn(null,'compassControls');
+      canvas.style.cursor = '';
+    };
+    $('resetAnglesBtn').onclick = function() { compassMarks = []; drawAll(); };
+    // --- PARTIAL ARC TOOL WORKFLOW ---
+    $('setArcCenterBtn').onclick = function() {
+      mode = MODES.PLACE_ARC_CENTER;
+      highlightBtn('setArcCenterBtn','partialArcControls');
+      canvas.style.cursor = 'crosshair';
+    };
+    $('setArcEndpointsBtn').onclick = function() {
+      if (!arcTool.center) return alert("Set arc center first.");
+      mode = MODES.PLACE_ARC_ENDPOINT;
+      highlightBtn('setArcEndpointsBtn','partialArcControls');
+      canvas.style.cursor = 'crosshair';
+    };
+    $('resetArcBtn').onclick = function() {
+      arcTool.center = null; arcTool.endpoints = [null,null]; arcTool.radius = 60; arcTool.invertArc = false;
+      highlightBtn(null,'partialArcControls');
+      drawAll();
+    };
+    $('toggleArcPointsBtn').onclick = function() {
+      arcTool.showPoints = !arcTool.showPoints;
+      drawAll();
+    };
+    $('invertArcBtn').onclick = function() {
+      arcTool.invertArc = !arcTool.invertArc;
+      drawAll();
+    };
+    $('arcRadiusUpBtn').onclick = function() { changeArcRadius(1); };
+    $('arcRadiusDownBtn').onclick = function() { changeArcRadius(-1); };
+    function changeArcRadius(deltaInches) {
+      if (!arcTool.center) return;
+      const pxPerUnit = getPixelToUnitRatio() || 1;
+      let radiusInInches = arcTool.radius * pxPerUnit;
+      radiusInInches = Math.max(10, Math.round(radiusInInches + deltaInches));
+      arcTool.radius = radiusInInches / pxPerUnit;
+      for (let i=0;i<2;++i) {
+        if (arcTool.endpoints[i]) {
+          const angle = angleOfPoint(arcTool.center, arcTool.endpoints[i]);
+          arcTool.endpoints[i] = pointOnArc(arcTool.center, arcTool.radius, angle);
+        }
+      }
+      drawAll();
+    }
+    // --- CANVAS EVENTS ---
+    canvas.addEventListener('mousedown', function(e) {
+      const mouse = getMouse(e);
+      lastMousePos = mouse;
+      // ARCTOOL: Placement/Drag
+      if (mode === MODES.PLACE_ARC_CENTER) {
+        arcTool.center = {x:mouse.x, y:mouse.y};
+        arcTool.radius = 60/(getPixelToUnitRatio()||1);
+        arcTool.endpoints = [null,null];
+        mode = MODES.NONE;
+        highlightBtn(null,'partialArcControls');
+        canvas.style.cursor = '';
+        drawAll();
+        return;
+      }
+      if (mode === MODES.PLACE_ARC_ENDPOINT && arcTool.center) {
+        const angle = Math.atan2(mouse.y-arcTool.center.y, mouse.x-arcTool.center.x);
+        const pt = pointOnArc(arcTool.center, arcTool.radius, angle);
+        if (!arcTool.endpoints[0]) arcTool.endpoints[0] = pt;
+        else if (!arcTool.endpoints[1]) {
+          arcTool.endpoints[1] = pt;
+          mode = MODES.NONE;
+          highlightBtn(null,'partialArcControls');
+          canvas.style.cursor = '';
+        }
+        drawAll();
+        return;
+      }
+      // Arc drag logic
+      if (arcTool.center) {
+        if (arcTool.showPoints) {
+          for (let i=0;i<2;++i) {
+            if (arcTool.endpoints[i] && dist(mouse,arcTool.endpoints[i])<13) {
+              arcTool.dragging.type = "endpoint"+i;
+              arcTool.dragging.offset = {x:mouse.x-arcTool.endpoints[i].x,y:mouse.y-arcTool.endpoints[i].y};
+              mode = MODES.DRAG_ARC;
+              return;
+            }
+          }
+        }
+        if (dist(mouse,arcTool.center)<16) {
+          arcTool.dragging.type = "center";
+          arcTool.dragging.offset = {x:mouse.x-arcTool.center.x, y:mouse.y-arcTool.center.y};
+          mode = MODES.DRAG_ARC;
+          return;
+        }
+        if (arcTool.endpoints[0]&&arcTool.endpoints[1]&&isPointNearArcSegment(mouse.x,mouse.y,arcTool)) {
+          arcTool.dragging.type = "arc";
+          arcTool.dragging.offset = {x:mouse.x-arcTool.center.x, y:mouse.y-arcTool.center.y};
+          mode = MODES.DRAG_ARC;
+          return;
+        }
+      }
+      // COMPASS: Placement/Drag/Resize/Angle marks
+      if (mode === MODES.PLACE_COMPASS) {
+        compassCenter = {x:mouse.x, y:mouse.y};
+        mode = MODES.RESIZE_COMPASS;
+        drawAll();
+        return;
+      }
+      if (mode === MODES.RESIZE_COMPASS) {
+        let d = dist(mouse, compassCenter);
+        if (Math.abs(d - compassRadius) < 14) { draggingCompass = "radius"; return; }
+        if (dist(mouse, compassCenter) < 14) { draggingCompass = "center"; dragOffset={x:mouse.x-compassCenter.x,y:mouse.y-compassCenter.y}; return; }
+      }
+      if (mode === MODES.ANGLE_MARKS && compassReady) {
+        // Drag mark?
+        for (let i=0; i<compassMarks.length; ++i) {
+          const pt = getCompassXY(compassMarks[i].angle);
+          if (dist(mouse,pt)<10) { draggingMarkIndex = i; compassMarks[i].dragging=true; return; }
+        }
+        // Add mark
+        const ang = getAngleFromCompassCenter(mouse.x, mouse.y);
+        compassMarks.push({angle:ang, dragging:false});
+        drawAll();
+        return;
+      }
+      // MEASUREMENT: Draw
+      if (mode === MODES.MEASUREMENT && activeMeas) {
+        if (!tempLineStart) { tempLineStart = mouse; }
+        else {
+          let start = tempLineStart, end = mouse;
+          if (activeMeas==='platform'||activeMeas==='base') end.y = start.y;
+          else if (activeMeas==='height') end.x = start.x;
+          measurements[activeMeas] = { line: [[start.x, start.y], [end.x, end.y]], value: null };
+          tempLineStart = null; mode = MODES.NONE; activeMeas = null; canvas.style.cursor = '';
+          [...document.querySelectorAll('#measurementControls button')].forEach(b=>b.classList.remove('active'));
+          syncMeasInputs();
+          drawAll();
+        }
+        return;
+      }
+      // IMAGE: Pan
+      if (imageLoaded && e.button === 0 && e.ctrlKey) {
+        isDraggingImage = true;
+        lastDrag = mouse;
+        canvas.style.cursor = 'grabbing';
+      }
+    });
+    window.addEventListener('mousemove', function(e) {
+      const mouse = getMouse(e);
+      lastMousePos = mouse;
+      // Arc drag
+      if (mode === MODES.DRAG_ARC && arcTool.dragging.type) {
+        if (arcTool.dragging.type === "center") {
+          arcTool.center.x = mouse.x - arcTool.dragging.offset.x; arcTool.center.y = mouse.y - arcTool.dragging.offset.y;
+          for (let i=0;i<2;++i) if (arcTool.endpoints[i]) arcTool.endpoints[i]=pointOnArc(arcTool.center,arcTool.radius,angleOfPoint(arcTool.center,arcTool.endpoints[i]));
+          drawAll();
+        } else if (arcTool.dragging.type==="endpoint0" && arcTool.endpoints[0]) {
+          const ang = Math.atan2(mouse.y-arcTool.center.y,mouse.x-arcTool.center.x); arcTool.endpoints[0]=pointOnArc(arcTool.center,arcTool.radius,ang); drawAll();
+        } else if (arcTool.dragging.type==="endpoint1" && arcTool.endpoints[1]) {
+          const ang = Math.atan2(mouse.y-arcTool.center.y,mouse.x-arcTool.center.x); arcTool.endpoints[1]=pointOnArc(arcTool.center,arcTool.radius,ang); drawAll();
+        } else if (arcTool.dragging.type==="arc") {
+          arcTool.center.x = mouse.x - arcTool.dragging.offset.x; arcTool.center.y = mouse.y - arcTool.dragging.offset.y;
+          for (let i=0;i<2;++i) if (arcTool.endpoints[i]) arcTool.endpoints[i]=pointOnArc(arcTool.center,arcTool.radius,angleOfPoint(arcTool.center,arcTool.endpoints[i]));
+          drawAll();
+        }
+      }
+      // Compass drag/resize
+      if (draggingCompass==="center") { compassCenter.x = mouse.x - dragOffset.x; compassCenter.y = mouse.y - dragOffset.y; drawAll(); }
+      if (draggingCompass==="radius") {
+        compassRadius = Math.max(50, Math.min(350, Math.round(Math.hypot(mouse.x-compassCenter.x, mouse.y-compassCenter.y))));
+        $('compassSize').value = compassRadius; $('sizeLabel').textContent = compassRadius+" px";
+        drawAll();
+      }
+      // Drag marks
+      if (draggingMarkIndex!==-1) {
+        compassMarks[draggingMarkIndex].angle = getAngleFromCompassCenter(mouse.x,mouse.y);
+        drawAll();
+      }
+      if (mode === MODES.MEASUREMENT && tempLineStart) drawAll();
+      if (isDraggingImage) {
+        imageOffset.x += mouse.x - lastDrag.x;
+        imageOffset.y += mouse.y - lastDrag.y;
+        lastDrag = mouse;
+        drawAll();
+      }
+    });
+    window.addEventListener('mouseup', function() {
+      arcTool.dragging.type = null;
+      mode = mode===MODES.DRAG_ARC?MODES.NONE:mode;
+      draggingCompass = false;
+      if (draggingMarkIndex!==-1) { compassMarks[draggingMarkIndex].dragging=false; draggingMarkIndex=-1; drawAll(); }
+      isDraggingImage = false; canvas.style.cursor = '';
+    });
+
+    // --- UTILITY ---
+    function getMouse(e) {
+      const r = canvas.getBoundingClientRect();
+      let x = e.clientX - r.left;
+      let y = e.clientY - r.top;
+      // Apply inverse transformation to get coordinates relative to the zoomed/panned image
+      x = (x - imageOffset.x) / imageZoom;
+      y = (y - imageOffset.y) / imageZoom;
+      return { x, y };
+    }
+    function dist(a,b) { return Math.hypot(a.x-b.x,a.y-b.y); }
+    function pointOnArc(center, radius, angle) { return {x:center.x+radius*Math.cos(angle), y:center.y+radius*Math.sin(angle)};}
+    function angleOfPoint(center,pt){return Math.atan2(pt.y-center.y,pt.x-center.x);}
+    function isPointNearArcSegment(x, y, arcTool, threshold = 18) {
+      if (!arcTool.endpoints[0] || !arcTool.endpoints[1]) return false;
+      let mouseDist = Math.abs(dist({ x, y }, arcTool.center) - arcTool.radius); if (mouseDist > threshold) return false;
+      let a0 = angleOfPoint(arcTool.center, arcTool.endpoints[0]); let a1 = angleOfPoint(arcTool.center, arcTool.endpoints[1]);
+      let am = angleOfPoint(arcTool.center, { x, y });
+      if (!arcTool.invertArc) {
+        if (a0 < a1) return am >= a0 && am <= a1; return am >= a0 || am <= a1;
+      } else {
+        if (a1 < a0) return am >= a1 && am <= a0; return am >= a1 || am <= a0;
+      }
+    }
+    function getAngleFromCompassCenter(x, y) {
+      if (compassCenter.x == null || compassCenter.y == null) return 0;
+      const dx = x - compassCenter.x, dy = y - compassCenter.y;
+      let rad = Math.atan2(dy, dx) - compassAngle * Math.PI/180;
+      let deg = rad * 180/Math.PI; deg = ((deg % 360) + 360) % 360;
+      return deg;
+    }
+    function getCompassXY(angle) {
+      const rad = (angle + compassAngle) * Math.PI / 180;
+      return { x: compassCenter.x + compassRadius * Math.cos(rad), y: compassCenter.y + compassRadius * Math.sin(rad) };
+    }
+    function highlightBtn(btnId, parentId) {
+      [...document.querySelectorAll(`#${parentId} .arc-btn, #${parentId} button`)].forEach(b=>b.classList.remove('active'));
+      if (btnId) $(btnId).classList.add('active');
+    }
+    // --- DRAW FUNCTIONS ---
+    function drawAll() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (imageLoaded) {
+        ctx.save();
+        ctx.translate(imageOffset.x, imageOffset.y);
+        ctx.scale(imageZoom, imageZoom);
+        ctx.drawImage(image, 0, 0);
+        ctx.restore();
+      }
+
+      ctx.save();
+      ctx.translate(imageOffset.x, imageOffset.y);
+      ctx.scale(imageZoom, imageZoom);
+
+      // Draw measurement lines
+      for (const k of ['platform','height','base','misc']) {
+        const m = measurements[k];
+        if (!m||!m.line) continue;
+        ctx.save();
+        ctx.setLineDash([8,7]);
+        ctx.strokeStyle = k==='misc'? '#f00':'red'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(m.line[0][0],m.line[0][1]); ctx.lineTo(m.line[1][0],m.line[1][1]); ctx.stroke();
+        ctx.setLineDash([]);
+        [m.line[0], m.line[1]].forEach(([x,y])=>{ctx.beginPath(); ctx.arc(x,y,4/imageZoom,0,2*Math.PI); ctx.fillStyle='#f00'; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=1.2/imageZoom; ctx.stroke();});
+        if (m.value) {const midx=(m.line[0][0]+m.line[1][0])/2, midy=(m.line[0][1]+m.line[1][1])/2; ctx.font=`bold ${15/imageZoom}px Arial`; ctx.fillStyle="#b00"; ctx.textAlign="center"; ctx.fillText(m.value+" in",midx,midy-12/imageZoom);}
+        ctx.restore();
+      }
+      // Draw temp measurement
+      if (mode === MODES.MEASUREMENT && tempLineStart) {
+        ctx.save();
+        ctx.setLineDash([8,7]);
+        ctx.strokeStyle='#f44'; ctx.lineWidth=2; ctx.beginPath();
+        ctx.moveTo(tempLineStart.x, tempLineStart.y);
+        let mouse = lastMousePos;
+        let tx=mouse.x, ty=mouse.y;
+        if (activeMeas==='platform'||activeMeas==='base') ty=tempLineStart.y;
+        else if (activeMeas==='height') tx=tempLineStart.x;
+        ctx.lineTo(tx,ty); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+      }
+      // Draw arc tool
+      drawPartialArcTool(ctx, arcTool);
+      // Draw compass
+      if (compassOn && compassCenter.x !== null && compassCenter.y !== null) {
+        ctx.save();
+        ctx.translate(compassCenter.x, compassCenter.y); ctx.rotate(compassAngle*Math.PI/180);
+        ctx.beginPath(); ctx.arc(0,0,compassRadius,0,2*Math.PI); ctx.strokeStyle='#0077cc'; ctx.lineWidth=2/imageZoom; ctx.stroke();
+        for (let i = 0; i < 360; i++) {
+          const rad = i * Math.PI / 180;
+          let outerX = compassRadius * Math.cos(rad), outerY = compassRadius * Math.sin(rad);
+          let innerX, innerY, lw, color;
+          if (i === 0) { innerX = (compassRadius-32)*Math.cos(rad); innerY = (compassRadius-32)*Math.sin(rad); lw=5/imageZoom;color='#d00'; }
+          else if (i%10===0) { innerX = (compassRadius-18)*Math.cos(rad); innerY = (compassRadius-18)*Math.sin(rad); lw=2/imageZoom;color='#333'; }
+          else { innerX=(compassRadius-10)*Math.cos(rad); innerY=(compassRadius-10)*Math.sin(rad); lw=1/imageZoom;color='#aaa'; }
+          ctx.beginPath(); ctx.moveTo(innerX,innerY); ctx.lineTo(outerX,outerY);
+          ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.stroke();
+          if (i%10===0) {ctx.save(); const labelRadius=compassRadius-32; ctx.translate(labelRadius*Math.cos(rad),labelRadius*Math.sin(rad)); ctx.rotate(-rad); ctx.font=`${14/imageZoom}px Arial`; ctx.fillStyle="#000"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText((i===0?"0":i.toString()),0,0); ctx.restore();}
+        }
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(compassCenter.x,compassCenter.y,8/imageZoom,0,2*Math.PI);
+        ctx.fillStyle='#d00'; ctx.fill(); ctx.lineWidth=3/imageZoom; ctx.strokeStyle='#fff'; ctx.stroke();
+        // Draw angle marks and callout
+        if (compassReady) {
+          for (let i=0;i<compassMarks.length;i++) {
+            const pt = getCompassXY(compassMarks[i].angle);
+            ctx.beginPath(); ctx.moveTo(compassCenter.x,compassCenter.y); ctx.lineTo(pt.x,pt.y);
+            ctx.strokeStyle=compassMarks[i].dragging?'#f90':'#c00'; ctx.lineWidth=3/imageZoom; ctx.stroke();
+            ctx.beginPath(); ctx.arc(pt.x,pt.y,8/imageZoom,0,2*Math.PI);
+            ctx.fillStyle=compassMarks[i].dragging?'#ffb84d':'#fff'; ctx.strokeStyle=compassMarks[i].dragging?'#f90':'#c00'; ctx.lineWidth=2/imageZoom; ctx.fill(); ctx.stroke();
+          }
+          // --- Compass dynamic callout for angle between two marks ---
+          if (compassMarks.length === 2) {
+            let a1 = compassMarks[0].angle, a2 = compassMarks[1].angle;
+            let startRad = (a1 + compassAngle) * Math.PI / 180;
+            let endRad = (a2 + compassAngle) * Math.PI / 180;
+            let diff = ((a2 - a1 + 360) % 360);
+            if (diff > 180) { [startRad, endRad] = [endRad, startRad]; diff = 360 - diff; }
+            // Arc
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = "#0a7";
+            ctx.lineWidth = 4/imageZoom;
+            ctx.arc(compassCenter.x, compassCenter.y, compassRadius + 22, startRad, endRad, false);
+            ctx.stroke();
+            ctx.restore();
+            // --- Dynamic label position ---
+            let labelRadius = compassRadius * (0.35 + 0.45 * Math.cos((diff/180)*Math.PI));
+            labelRadius = Math.max(24, Math.min(labelRadius, compassRadius - 20));
+            let arcMidAngle = (startRad + endRad) / 2;
+            let lx = compassCenter.x + labelRadius * Math.cos(arcMidAngle);
+            let ly = compassCenter.y + labelRadius * Math.sin(arcMidAngle);
+            ctx.save();
+            ctx.font = `bold ${18/imageZoom}px Arial`;
+            ctx.fillStyle = "#0a7";
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 5/imageZoom;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.strokeText(`${Math.round(diff)}°`, lx, ly);
+            ctx.fillText(`${Math.round(diff)}°`, lx, ly);
+            ctx.restore();
+          }
+        }
+      }
+      
+      ctx.restore();
+
+      // Draw arc info
+      showArcInfo();
+      // Draw compass info (only angle between two marks)
+      showMarksInfo();
+    }
+    function drawPartialArcTool(ctx, arcTool) {
+      if (!arcTool.center) { updateArcRadiusDisplay(""); $('arcInfo').textContent=""; return; }
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(arcTool.center.x, arcTool.center.y, arcTool.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = "#bcd";
+      ctx.setLineDash([8, 10]);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      if (arcTool.endpoints[0] && arcTool.endpoints[1]) {
+        let theta1 = angleOfPoint(arcTool.center, arcTool.endpoints[0]);
+        let theta2 = angleOfPoint(arcTool.center, arcTool.endpoints[1]);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(arcTool.center.x, arcTool.center.y, arcTool.radius, theta1, theta2, arcTool.invertArc);
+        ctx.strokeStyle = "#0a7";
+        ctx.lineWidth = 8;
+        ctx.setLineDash([18, 15]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+      if (arcTool.showPoints) {
+        for (let i = 0; i < 2; ++i) {
+          if (arcTool.endpoints[i]) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(arcTool.endpoints[i].x, arcTool.endpoints[i].y, 11, 0, 2 * Math.PI);
+            ctx.fillStyle = "#ff0";
+            ctx.strokeStyle = "#d90";
+            ctx.lineWidth = 3;
+            ctx.fill();
+            ctx.stroke();
+            ctx.lineWidth = 1;
+            ctx.font = "13px Arial";
+            ctx.fillStyle = "#a70";
+            ctx.textAlign = "center";
+            ctx.fillText(i === 0 ? "A" : "B", arcTool.endpoints[i].x, arcTool.endpoints[i].y - 15);
+            ctx.restore();
+          }
+        }
+      }
+      let refPt = arcTool.endpoints[0] || arcTool.endpoints[1] || pointOnArc(arcTool.center, arcTool.radius, 0);
+      let angle = angleOfPoint(arcTool.center, refPt);
+      let onArc = pointOnArc(arcTool.center, arcTool.radius, angle);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(arcTool.center.x, arcTool.center.y);
+      ctx.lineTo(onArc.x, onArc.y);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#2b3";
+      ctx.setLineDash([6, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      // Draw center marker
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(arcTool.center.x, arcTool.center.y, 13, 0, 2 * Math.PI);
+      ctx.fillStyle = "#9fa";
+      ctx.strokeStyle = "#070";
+      ctx.lineWidth = 4;
+      ctx.fill();
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.font = "14px Arial";
+      ctx.fillStyle = "#070";
+      ctx.textAlign = "center";
+      ctx.fillText("Center", arcTool.center.x, arcTool.center.y - 17);
+      ctx.restore();
+
+      // --- BEGIN: Draw callout showing vertical distance from base line ---
+      if (measurements.base && measurements.base.line) {
+        // Get base line points
+        const [[bx1, by1], [bx2, by2]] = measurements.base.line;
+        // Direction vector of the base line
+        const dx = bx2 - bx1, dy = by2 - by1;
+        // Normalized direction
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          // Perpendicular unit vector
+          const nx = -dy / len, ny = dx / len;
+          // Vector from base start to arc center
+          const vx = arcTool.center.x - bx1, vy = arcTool.center.y - by1;
+          // Project to perpendicular
+          const dot = vx * nx + vy * ny;
+          // Convert to user units if possible
+          let pxPerUnit = getPixelToUnitRatio() || 1;
+          let distInches = dot * pxPerUnit;
+          // Draw callout above the center
+          ctx.save();
+          ctx.font = "bold 15px Arial";
+          ctx.fillStyle = "#0a7";
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 4;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          let calloutX = arcTool.center.x;
+          let calloutY = arcTool.center.y - 28;
+          ctx.strokeText(`${distInches.toFixed(2)}" from base`, calloutX, calloutY);
+          ctx.fillText(`${distInches.toFixed(2)}" from base`, calloutX, calloutY);
+          ctx.restore();
+        }
+      }
+      // --- END: Arc tool base distance callout ---
+
+      updateArcRadiusDisplay();
+    }
+    function updateArcRadiusDisplay() {
+      if (!arcTool.center) {
+        document.getElementById('arcRadiusValue').textContent = "";
+        return;
+      }
+      const pxPerUnit = getPixelToUnitRatio() || 1;
+      const realRadius = (arcTool.radius * pxPerUnit).toFixed(0);
+      document.getElementById('arcRadiusValue').textContent = realRadius + '"';
+    }
+    function showArcInfo() {
+      if (!arcTool.center || !arcTool.endpoints[0] || !arcTool.endpoints[1]) { $('arcInfo').textContent = ""; return; }
+      let theta1 = angleOfPoint(arcTool.center, arcTool.endpoints[0]);
+      let theta2 = angleOfPoint(arcTool.center, arcTool.endpoints[1]);
+      let arcAngle = theta2 - theta1;
+      if (arcTool.invertArc) arcAngle = (theta1 - theta2);
+      if (arcAngle < 0) arcAngle += Math.PI * 2;
+      let deg = arcAngle * 180 / Math.PI;
+      $('arcInfo').textContent =
+        `Partial arc: Angle ${(deg).toFixed(1)}°, Radius ${(arcTool.radius * (getPixelToUnitRatio() || 1)).toFixed(2)}"`;
+    }
+    function showMarksInfo() {
+      const angleInfo = document.getElementById('angleInfo');
+      if (!compassReady || compassMarks.length !== 2) {
+        angleInfo.innerHTML = compassMarks.length < 2
+          ? `<span style="color:#888">Add two compass marks to see angle.</span>`
+          : "";
+        return;
+      }
+      // Get the absolute angle between two marks
+      let a1 = compassMarks[0].angle, a2 = compassMarks[1].angle;
+      let diff = ((a2 - a1 + 360) % 360);
+      if (diff > 180) diff = 360 - diff;
+      angleInfo.innerHTML = `<b>Angle between marks:</b> <span style="color:#0a7">${Math.round(diff)}°</span>`;
+    }
+    // --- INIT ---
+    drawAll();
+  </script>
+</body>
+</html>
